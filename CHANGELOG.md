@@ -10,6 +10,22 @@
 
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6)
 
+#### Batch 2D — Zustand + zundo store
+**Commit:** `feat: Zustand store with zundo undo/redo and persist session settings`
+- Created `src/lib/store/types.ts` — all 6 slice interfaces + `AppState` + `UndoableState` in one file to eliminate circular dependencies
+- Created `src/lib/store/slices/filesSlice.ts` — subjects array, activeSubjectId, add/remove/navigate (next/prev with wrap-around)
+- Created `src/lib/store/slices/backdropSlice.ts` — backdrops array, activeBackdropId, AI generation state (status/prompt/model), resetGeneration
+- Created `src/lib/store/slices/compositionSlice.ts` — CompositionState, exportProfileId, nameStyleId, fontPairId, lockSettings, applyBlendPreset (merges only keys present in BLEND_PRESETS constant)
+- Created `src/lib/store/slices/namesSlice.ts` — firstName/lastName, stickyLastName, nameOverlay settings, pasteAutoSplit (first-whitespace split), clearForNextFile (respects sticky)
+- Created `src/lib/store/slices/exportSlice.ts` — jobName, batchItems, exportCounter, approvalGiven, getQueueSummary() computed getter
+- Created `src/lib/store/slices/uiSlice.ts` — tabs, modals, canvasZoom, showToast (clears previous timer before setting new one)
+- Created `src/lib/store/index.ts` — combines all slices with `immer` + `temporal` (zundo, partializes to UndoableState, limit 50) + `persist` (localStorage, partializes session settings); exports `useStore`, `useTemporalStore`, `undo`, `redo`
+- Created `src/lib/store/selectors.ts` — 30 selector hooks covering all slices; `useCanUndo` / `useCanRedo` / `useUndoCount` / `useRedoCount` via `useTemporalStore`
+- Middleware stack: `persist(temporal(immer(slices)))` — persist is outermost, immer is innermost
+- Persist key: `SESSION_STORAGE_KEY`; persists jobName, lockSettings, exportProfileId, nameStyleId, fontPairId, stickyLastName, nameOverlayEnabled, composition
+- Undo/redo tracks: composition, nameStyleId, fontPairId, firstName, lastName — NOT files, backdrops, export queue, or UI state
+- 0 TypeScript errors in all new store files
+
 #### Batch 2E — Sharp pipeline refactor
 **Commit:** `feat: Sharp compositing pipeline — progressive blur, light wrap, defringe, pure functions`
 - Created `src/lib/compositing/` with 8 files, 7 pure async functions, zero side effects
