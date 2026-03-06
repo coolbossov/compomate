@@ -10,6 +10,20 @@
 
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6)
 
+#### Batch 2E — Sharp pipeline refactor
+**Commit:** `feat: Sharp compositing pipeline — progressive blur, light wrap, defringe, pure functions`
+- Created `src/lib/compositing/` with 8 files, 7 pure async functions, zero side effects
+- `types.ts` — `CompositorInput`, `CompositorOutput`, `PlacementResult`, `PoseMetrics` interfaces
+- `normalize.ts` — `normalizeSubject` (RGBA sRGB PNG, EXIF rotation, pixel-count guard), `normalizeBackdrop` (cover-fit to 4000×5000; intentionally allows upscale so FAL AI 1024×1280 backdrops fill canvas)
+- `placement.ts` — `calculatePlacement` (foot-anchor model: xPct/yPct drive bottom-centre of subject), `analyzeSubjectPose` (pixel-scan returning fractional PoseMetrics; lean via top/bottom centroid delta)
+- `defringe.ts` — `defringeSubject` (morphological alpha erosion: per-pixel min-neighbour scan within radius, shaves colour-fringe ring without touching RGB)
+- `reflect.ts` — `createReflection` (5-layer progressive blur: 2/6/12/20/32px at 0.9/0.7/0.55/0.35/0.15 opacity; feet-line detection zeroes above-feet rows; gradient fade × overall opacity; returns full 4000×5000 transparent canvas with reflection at placement-relative position)
+- `lightwrap.ts` — `applyLightWrap` (backdrop crop → 32px blur wash → dilated-minus-original edge mask → multiply → composite at LIGHT_WRAP_STRENGTH)
+- `text.ts` — `renderNameOverlay` (wraps existing `buildNameOverlaySvg`, no-ops when disabled or empty)
+- `pipeline.ts` — `runCompositorPipeline` orchestrator: normalize → size → placement → leg-fade → defringe → lightwrap → reflection → backdrop composite (reflection, subject, fog SVG) → name overlay → 300 DPI PNG
+- `index.ts` — public barrel re-export
+- 0 TypeScript errors in compositing module; pre-existing backdropSlice.ts errors unaffected
+
 #### Batch 2F — R2 upload service
 **Commit:** `feat: R2 upload service — presigned URLs, client uploader, env validation`
 - Created `src/lib/server/env.ts` — `validateEnv()` / `getEnv()` (cached) / `getR2Env()` (null-safe R2 check); detects placeholder values like `<generate-at-cloudflare-dashboard>`
