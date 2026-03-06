@@ -111,6 +111,9 @@ export const useShowSideBySide = () => useStore((s) => s.showSideBySide);
 /** Whether the danger zone (destructive actions) section is expanded. */
 export const useShowDangerZone = () => useStore((s) => s.showDangerZone);
 
+/** Whether the safe area overlay is shown on the canvas. */
+export const useShowSafeArea = () => useStore((s) => s.showSafeArea);
+
 /** Current canvas zoom level (1.0 = 100%). */
 export const useCanvasZoom = () => useStore((s) => s.canvasZoom);
 

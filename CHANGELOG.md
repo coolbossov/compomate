@@ -8,6 +8,28 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 3 Component Extraction
+
+#### Batch 3 — page.tsx extraction into 11 components (Zustand store wired)
+**Commit:** `feat: extract page.tsx into 11 focused components wired to Zustand store`
+- Installed `immer` (was used by zustand middleware but missing from package.json)
+- Extended `UISlice` in `src/lib/store/types.ts` — added `showSafeArea: boolean` and `setShowSafeArea(v: boolean)`
+- Extended `src/lib/store/slices/uiSlice.ts` — implemented `showSafeArea` (default `true`) and `setShowSafeArea`
+- Added `useShowSafeArea` selector to `src/lib/store/selectors.ts`
+- Created `src/lib/client/utils.ts` — all client-side utility functions extracted from page.tsx: `makeId`, `wait`, `isImageFile`, `parseErrorText`, `dataUrlToBlob`, `svgToDataUrl`, `loadImageElement`, `canvasToBlob`, `fileToDataUrl`, `loadImageDimensions`, `fileToAsset`, `fileToBackdropAsset` (new), `dataUrlToAsset`, `dataUrlToBackdropAsset` (new), `filesToAssets`, `filesToBackdropAssets` (new), `collectImageFiles`, `analyzeSubjectPose`, `directionFromVector`, `detectBackdropLightDirection`, `isProjectSnapshot`, `prepareExportPayload` (kept for backward compat — signature changed to `(backdropUrl, subjectUrl, exportProfile)`), `buildDownloadFilename`; also exports `PoseAnalysis` type
+- Created `src/components/layout/AppHeader.tsx` — reads `jobName` from store, job name input, `?` shortcuts button
+- Created `src/components/layout/ShortcutsOverlay.tsx` — maps `SHORTCUTS` array, closes on backdrop click
+- Created `src/components/workspace/EmptyState.tsx` — typed `no-backdrop | no-subject | ready` states
+- Created `src/components/workspace/DangerZoneOverlay.tsx` — 4×6 (red) and 5×7 (orange) crop zone overlays from `CROP_ZONES` constant
+- Created `src/components/workspace/Canvas.tsx` — full canvas with backdrop letterboxing, drag (pointer events preserved exactly), shadow ellipse, reflection image, leg fade mask, floor fog, name overlay SVG, safe area box; all state from Zustand store; local state: `canvasSize`
+- Created `src/components/panels/FilePanel.tsx` — subjects list, Add Files/Add Folder, thumbnails, remove; local `objectUrlsRef` for cleanup
+- Created `src/components/panels/BackdropPanel.tsx` — backdrops list, upload, FAL AI generation with polling, Projects (Supabase) save/load/refresh; store for backdrop state, local state for generation UI and Supabase UI
+- Created `src/components/panels/NameEntryPanel.tsx` — firstName/lastName inputs with paste-auto-split on multi-word paste, stickyLastName toggle, nameOverlay toggle
+- Created `src/components/panels/ControlPanel.tsx` — Auto Assist (auto place+blend, auto shadow direction, Soft/Studio/Dramatic presets), Placement sliders, Shadow section (enable + 5 sliders), Reflection section (enable + 4 sliders), Blend Helpers (leg fade + fog); local `poseAnalysis` state for auto functions
+- Created `src/components/panels/ExportPanel.tsx` — name style selector, export profile selector, safe area toggle, Export Final PNG button, Batch Queue (queue pair/subject×all/backdrop×all, batch list, run/cancel/clear); local `isExporting`, `isBatchRunning`, `batchAbortRef`, `batchRequestAbortRef`
+- Rewrote `src/app/page.tsx` to 38 lines — composition root only: imports panels, dynamic Canvas (ssr:false), 3-column grid layout (320px | flex | 360px)
+- Build: 0 TypeScript errors, 0 ESLint errors, all 9 pages/routes generated successfully
+
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6)
 
 #### Batch 2D — Zustand + zundo store

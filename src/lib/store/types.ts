@@ -104,6 +104,7 @@ export interface UISlice {
   showShortcuts: boolean;
   showSideBySide: boolean;
   showDangerZone: boolean;
+  showSafeArea: boolean;
   canvasZoom: number;
   toastMessage: string | null;
   toastTimeout: ReturnType<typeof setTimeout> | null;
@@ -111,6 +112,7 @@ export interface UISlice {
   setShowShortcuts: (v: boolean) => void;
   setShowSideBySide: (v: boolean) => void;
   setShowDangerZone: (v: boolean) => void;
+  setShowSafeArea: (v: boolean) => void;
   setCanvasZoom: (zoom: number) => void;
   showToast: (message: string, durationMs?: number) => void;
   clearToast: () => void;

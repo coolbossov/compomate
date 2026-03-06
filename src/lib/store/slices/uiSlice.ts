@@ -14,6 +14,7 @@ export const createUISlice: UISliceCreator = (set, get) => ({
   showShortcuts: false,
   showSideBySide: false,
   showDangerZone: false,
+  showSafeArea: true,
   canvasZoom: 1,
   toastMessage: null,
   toastTimeout: null,
@@ -36,6 +37,11 @@ export const createUISlice: UISliceCreator = (set, get) => ({
   setShowDangerZone: (v: boolean) =>
     set((draft) => {
       draft.showDangerZone = v;
+    }),
+
+  setShowSafeArea: (v: boolean) =>
+    set((draft) => {
+      draft.showSafeArea = v;
     }),
 
   setCanvasZoom: (zoom: number) =>
