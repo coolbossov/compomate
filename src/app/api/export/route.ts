@@ -11,6 +11,7 @@ import {
   type NameStyleId,
 } from "@/lib/shared/composition";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { buildNameOverlaySvg } from "@/lib/shared/name-overlay";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,8 @@ const PROFILE_ID_SET = new Set<ExportProfileId>(
   Object.keys(EXPORT_PROFILES) as ExportProfileId[],
 );
 const MAX_BINARY_BYTES = 14_000_000;
+const MAX_INPUT_PIXELS = 40_000_000;
+const MAX_INPUT_EDGE_PX = 9_000;
 
 function estimateDataUrlBinaryBytes(dataUrl: string): number {
   const commaIndex = dataUrl.indexOf(",");
@@ -60,6 +63,32 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
     throw new Error("Invalid data URL input.");
   }
   return Buffer.from(match[2], "base64");
+}
+
+function createUserImageSharp(input: Buffer): sharp.Sharp {
+  return sharp(input, { limitInputPixels: MAX_INPUT_PIXELS });
+}
+
+async function readUserImageMetadata(
+  input: Buffer,
+  label: "Backdrop" | "Subject",
+): Promise<{ width: number; height: number }> {
+  const metadata = await createUserImageSharp(input).metadata();
+  const width = metadata.width;
+  const height = metadata.height;
+  if (!width || !height) {
+    throw new Error(`Unable to read ${label.toLowerCase()} dimensions.`);
+  }
+
+  if (
+    width > MAX_INPUT_EDGE_PX ||
+    height > MAX_INPUT_EDGE_PX ||
+    width * height > MAX_INPUT_PIXELS
+  ) {
+    throw new Error(`${label} dimensions exceed server image limits.`);
+  }
+
+  return { width, height };
 }
 
 type ParsedExportInput = {
@@ -157,15 +186,6 @@ async function parseExportInput(request: NextRequest): Promise<ParsedExportInput
     exportProfileId: parseExportProfileId(body.exportProfile),
     nameStyle: parseNameStyle(body.nameStyle),
   };
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }
 
 function analyzeSubjectPose(raw: {
@@ -434,71 +454,6 @@ function buildFogOverlay(
   return Buffer.from(svg);
 }
 
-function buildNameOverlay(
-  canvasWidth: number,
-  canvasHeight: number,
-  firstName?: string,
-  lastName?: string,
-  style: NameStyleId = "classic",
-): Buffer | null {
-  const first = (firstName ?? "").trim();
-  const last = (lastName ?? "").trim();
-  if (!first && !last) {
-    return null;
-  }
-
-  const content = [first, last].filter(Boolean).join(" ").toUpperCase();
-  const safeText = escapeXml(content);
-  const baselineY = canvasHeight - Math.max(34, Math.round(canvasHeight * 0.05));
-  const fontSize = Math.max(40, Math.round(canvasWidth * 0.038));
-
-  if (style === "outline") {
-    const svg = `
-      <svg width="${canvasWidth}" height="${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
-        <text x="50%" y="${baselineY}" text-anchor="middle"
-          font-size="${fontSize}" font-family="Arial, Helvetica, sans-serif"
-          font-weight="700" fill="rgba(255,255,255,0.08)" stroke="#ffffff" stroke-width="2.4"
-          letter-spacing="0.07em">${safeText}</text>
-      </svg>
-    `;
-    return Buffer.from(svg);
-  }
-
-  if (style === "modern") {
-    const modernSize = Math.max(34, Math.round(fontSize * 0.84));
-    const svg = `
-      <svg width="${canvasWidth}" height="${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="name-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#f8fbff" />
-            <stop offset="100%" stop-color="#dce6ff" />
-          </linearGradient>
-        </defs>
-        <text x="50%" y="${baselineY}" text-anchor="middle"
-          font-size="${modernSize}" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif"
-          font-weight="600" fill="url(#name-grad)" letter-spacing="0.16em">${safeText}</text>
-      </svg>
-    `;
-    return Buffer.from(svg);
-  }
-
-  const svg = `
-    <svg width="${canvasWidth}" height="${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="name-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.75"/>
-        </filter>
-      </defs>
-      <text x="50%" y="${baselineY}" text-anchor="middle"
-        font-size="${fontSize}" font-family="Arial, Helvetica, sans-serif"
-        font-weight="700" fill="#ffffff" letter-spacing="0.06em" filter="url(#name-shadow)">
-        ${safeText}
-      </text>
-    </svg>
-  `;
-  return Buffer.from(svg);
-}
-
 async function fitOverlayWithinCanvas(
   input: Buffer,
   left: number,
@@ -579,12 +534,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const backdropBuffer = parsed.backdropBuffer;
     const subjectBuffer = parsed.subjectBuffer;
 
-    const backdropMeta = await sharp(backdropBuffer).metadata();
-    const backdropWidth = backdropMeta.width;
-    const backdropHeight = backdropMeta.height;
-    if (!backdropWidth || !backdropHeight) {
-      throw new Error("Unable to read backdrop dimensions.");
-    }
+    const { width: backdropWidth, height: backdropHeight } = await readUserImageMetadata(
+      backdropBuffer,
+      "Backdrop",
+    );
+    await readUserImageMetadata(subjectBuffer, "Subject");
 
     const compositionInput = parsed.compositionInput;
     const composition: CompositionState = {
@@ -623,7 +577,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       backdropHeight,
     );
 
-    const resizedSubjectPng = await sharp(subjectBuffer)
+    const resizedSubjectPng = await createUserImageSharp(subjectBuffer)
       .rotate()
       .ensureAlpha()
       .resize({ width: backdropWidth, height: targetSubjectHeight, fit: "inside" })
@@ -721,18 +675,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const nameOverlay = buildNameOverlay(
+    const nameOverlaySvg = buildNameOverlaySvg(
       backdropWidth,
       backdropHeight,
       parsed.firstName,
       parsed.lastName,
       nameStyle,
     );
-    if (nameOverlay) {
-      compositeInputs.push({ input: nameOverlay, left: 0, top: 0 });
+    if (nameOverlaySvg) {
+      compositeInputs.push({ input: Buffer.from(nameOverlaySvg), left: 0, top: 0 });
     }
 
-    let output = await sharp(backdropBuffer)
+    let output = await createUserImageSharp(backdropBuffer)
       .ensureAlpha()
       .composite(compositeInputs)
       .png({ compressionLevel: 9 })
@@ -767,6 +721,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         ? 400
         : message.includes("too large")
           ? 413
+          : message.includes("image limits")
+            ? 413
           : message.includes("Invalid composition")
             ? 400
             : 500;

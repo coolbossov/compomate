@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getSupabaseAdminClient,
-  isSupabaseConfigured,
 } from "@/lib/server/supabase-admin";
+import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
@@ -26,9 +26,10 @@ export async function GET(
     );
   }
 
-  if (!isSupabaseConfigured()) {
+  const persistence = getProjectPersistenceStatus();
+  if (!persistence.available) {
     return NextResponse.json(
-      { error: "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." },
+      { error: persistence.reason ?? "Project persistence is unavailable." },
       { status: 503 },
     );
   }

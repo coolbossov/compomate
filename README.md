@@ -48,6 +48,9 @@ FAL_MODEL=fal-ai/flux/schnell
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 
+# only enable this for trusted internal environments until auth is added
+COMPOMATE_ALLOW_UNAUTHENTICATED_PROJECT_PERSISTENCE=false
+
 # optional (future feature path)
 GEMINI_API_KEY=
 ```
@@ -59,6 +62,7 @@ Migration file is included:
 - `supabase/migrations/20260306_create_compomate_projects.sql`
 
 Apply it with your Supabase migration workflow before using project save/load.
+Remote Supabase save/load is disabled by default until authentication is implemented.
 
 ## Validation
 

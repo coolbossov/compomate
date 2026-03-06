@@ -13,6 +13,7 @@ import {
   type ExportProfileId,
   type NameStyleId,
 } from "@/lib/shared/composition";
+import { buildNameOverlaySvg } from "@/lib/shared/name-overlay";
 import type {
   ProjectSnapshot,
   StoredProjectSummary,
@@ -21,10 +22,17 @@ import type {
 type Asset = {
   id: string;
   name: string;
+  file: File;
   objectUrl: string;
-  dataUrl: string;
   width: number;
   height: number;
+};
+
+type PreviewRect = {
+  leftPx: number;
+  topPx: number;
+  widthPx: number;
+  heightPx: number;
 };
 
 type PoseAnalysis = {
@@ -131,6 +139,10 @@ function dataUrlToBlob(dataUrl: string): Blob {
     bytes[i] = binary.charCodeAt(i);
   }
   return new Blob([bytes], { type: mimeType });
+}
+
+function svgToDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function loadImageElement(url: string): Promise<HTMLImageElement> {
@@ -266,15 +278,14 @@ function loadImageDimensions(objectUrl: string): Promise<{ width: number; height
   });
 }
 
-async function fileToAsset(file: File, dataUrl?: string): Promise<Asset> {
+async function fileToAsset(file: File): Promise<Asset> {
   const objectUrl = URL.createObjectURL(file);
-  const sourceDataUrl = dataUrl ?? (await fileToDataUrl(file));
   const dimensions = await loadImageDimensions(objectUrl);
   return {
     id: makeId(),
     name: file.name,
+    file,
     objectUrl,
-    dataUrl: sourceDataUrl,
     width: dimensions.width,
     height: dimensions.height,
   };
@@ -283,7 +294,7 @@ async function fileToAsset(file: File, dataUrl?: string): Promise<Asset> {
 async function dataUrlToAsset(name: string, dataUrl: string): Promise<Asset> {
   const blob = dataUrlToBlob(dataUrl);
   const file = new File([blob], name, { type: blob.type || "image/png" });
-  return fileToAsset(file, dataUrl);
+  return fileToAsset(file);
 }
 
 async function filesToAssets(files: File[]): Promise<{
@@ -300,24 +311,17 @@ async function filesToAssets(files: File[]): Promise<{
     );
   }
 
-  const settled = await Promise.allSettled(
-    limitedFiles.map(async (file) => {
-      if (file.size > MAX_FILE_BYTES) {
-        skipped.push(`${file.name} skipped (file too large).`);
-        return null;
-      }
-      return fileToAsset(file);
-    }),
-  );
-
   const assets: Asset[] = [];
-  for (const result of settled) {
-    if (result.status === "fulfilled" && result.value) {
-      assets.push(result.value);
+  for (const file of limitedFiles) {
+    if (file.size > MAX_FILE_BYTES) {
+      skipped.push(`${file.name} skipped (file too large).`);
       continue;
     }
-    if (result.status === "rejected") {
-      skipped.push(result.reason instanceof Error ? result.reason.message : "Failed to load file.");
+
+    try {
+      assets.push(await fileToAsset(file));
+    } catch (error) {
+      skipped.push(error instanceof Error ? error.message : "Failed to load file.");
     }
   }
 
@@ -558,6 +562,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const draggingPointerRef = useRef<number | null>(null);
   const batchAbortRef = useRef(false);
+  const batchRequestAbortRef = useRef<AbortController | null>(null);
   const objectUrlsRef = useRef(new Set<string>());
 
   const [backdrops, setBackdrops] = useState<Asset[]>([]);
@@ -597,6 +602,7 @@ export default function Home() {
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null);
+  const [projectPersistenceReason, setProjectPersistenceReason] = useState<string | null>(null);
 
   const activeBackdrop = useMemo(
     () => backdrops.find((backdrop) => backdrop.id === activeBackdropId) ?? null,
@@ -634,30 +640,74 @@ export default function Home() {
     (poseAnalysis?.leanPct ?? 0) / 100,
   );
 
-  const safeAreaBox = useMemo(() => {
-    if (!activeProfile.aspectRatio) {
-      return { widthPct: 100, heightPct: 100, leftPct: 0, topPct: 0 };
+  const backdropBox = useMemo<PreviewRect | null>(() => {
+    if (!activeBackdrop) {
+      return null;
     }
 
+    const imageWidth = Math.max(1, activeBackdrop.width || 1);
+    const imageHeight = Math.max(1, activeBackdrop.height || 1);
+    const imageRatio = imageWidth / imageHeight;
     const containerRatio = canvasSize.width / Math.max(1, canvasSize.height);
-    if (containerRatio >= activeProfile.aspectRatio) {
-      const widthPct = clamp((activeProfile.aspectRatio / containerRatio) * 100, 1, 100);
+
+    if (containerRatio >= imageRatio) {
+      const heightPx = canvasSize.height;
+      const widthPx = heightPx * imageRatio;
       return {
-        widthPct,
-        heightPct: 100,
-        leftPct: (100 - widthPct) / 2,
-        topPct: 0,
+        leftPx: (canvasSize.width - widthPx) / 2,
+        topPx: 0,
+        widthPx,
+        heightPx,
       };
     }
 
-    const heightPct = clamp((containerRatio / activeProfile.aspectRatio) * 100, 1, 100);
     return {
-      widthPct: 100,
-      heightPct,
-      leftPct: 0,
-      topPct: (100 - heightPct) / 2,
+      leftPx: 0,
+      topPx: (canvasSize.height - canvasSize.width / imageRatio) / 2,
+      widthPx: canvasSize.width,
+      heightPx: canvasSize.width / imageRatio,
     };
-  }, [activeProfile.aspectRatio, canvasSize]);
+  }, [activeBackdrop, canvasSize]);
+
+  const safeAreaBox = useMemo<PreviewRect | null>(() => {
+    if (!backdropBox || !activeProfile.aspectRatio) {
+      return null;
+    }
+
+    const backdropRatio = backdropBox.widthPx / Math.max(1, backdropBox.heightPx);
+    if (backdropRatio >= activeProfile.aspectRatio) {
+      const widthPx = backdropBox.heightPx * activeProfile.aspectRatio;
+      return {
+        leftPx: backdropBox.leftPx + (backdropBox.widthPx - widthPx) / 2,
+        topPx: backdropBox.topPx,
+        widthPx,
+        heightPx: backdropBox.heightPx,
+      };
+    }
+
+    const heightPx = backdropBox.widthPx / activeProfile.aspectRatio;
+    return {
+      leftPx: backdropBox.leftPx,
+      topPx: backdropBox.topPx + (backdropBox.heightPx - heightPx) / 2,
+      widthPx: backdropBox.widthPx,
+      heightPx,
+    };
+  }, [activeProfile.aspectRatio, backdropBox]);
+
+  const nameOverlayPreviewUrl = useMemo(() => {
+    if (!activeBackdrop) {
+      return null;
+    }
+
+    const svg = buildNameOverlaySvg(
+      Math.max(1, activeBackdrop.width || 1),
+      Math.max(1, activeBackdrop.height || 1),
+      firstName,
+      lastName,
+      nameStyle,
+    );
+    return svg ? svgToDataUrl(svg) : null;
+  }, [activeBackdrop, firstName, lastName, nameStyle]);
 
   useEffect(() => {
     const registeredUrls = objectUrlsRef.current;
@@ -892,8 +942,12 @@ export default function Home() {
     }
 
     const rect = canvas.getBoundingClientRect();
-    const xPct = clamp(((clientX - rect.left) / rect.width) * 100, 5, 95);
-    const yPct = clamp(((clientY - rect.top) / rect.height) * 100, 25, 96);
+    const targetLeft = rect.left + (backdropBox?.leftPx ?? 0);
+    const targetTop = rect.top + (backdropBox?.topPx ?? 0);
+    const targetWidth = Math.max(1, backdropBox?.widthPx ?? rect.width);
+    const targetHeight = Math.max(1, backdropBox?.heightPx ?? rect.height);
+    const xPct = clamp(((clientX - targetLeft) / targetWidth) * 100, 5, 95);
+    const yPct = clamp(((clientY - targetTop) / targetHeight) * 100, 25, 96);
 
     setComposition((current) => ({ ...current, xPct, yPct }));
   }
@@ -1229,10 +1283,14 @@ export default function Home() {
           formData.append("exportProfile", item.exportProfile);
           formData.append("nameStyle", item.nameStyle);
 
+          const controller = new AbortController();
+          batchRequestAbortRef.current = controller;
           const response = await fetch("/api/export", {
             method: "POST",
             body: formData,
+            signal: controller.signal,
           });
+          batchRequestAbortRef.current = null;
 
           if (!response.ok) {
             const message = parseErrorText(await response.text());
@@ -1254,7 +1312,13 @@ export default function Home() {
             ),
           );
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Batch export failed.";
+          batchRequestAbortRef.current = null;
+          const message =
+            error instanceof DOMException && error.name === "AbortError"
+              ? "Cancelled by user."
+              : error instanceof Error
+                ? error.message
+                : "Batch export failed.";
           setBatchItems((current) =>
             current.map((entry) =>
               entry.id === item.id ? { ...entry, status: "failed", error: message } : entry,
@@ -1281,6 +1345,7 @@ export default function Home() {
     } finally {
       setIsBatchRunning(false);
       batchAbortRef.current = false;
+      batchRequestAbortRef.current = null;
     }
   }
 
@@ -1377,7 +1442,22 @@ export default function Home() {
     }
   }
 
-  function buildSnapshot(): ProjectSnapshot {
+  async function buildSnapshot(): Promise<ProjectSnapshot> {
+    const [serializedBackdrop, serializedSubject] = await Promise.all([
+      activeBackdrop
+        ? fileToDataUrl(activeBackdrop.file).then((dataUrl) => ({
+            name: activeBackdrop.name,
+            dataUrl,
+          }))
+        : Promise.resolve(null),
+      activeSubject
+        ? fileToDataUrl(activeSubject.file).then((dataUrl) => ({
+            name: activeSubject.name,
+            dataUrl,
+          }))
+        : Promise.resolve(null),
+    ]);
+
     return {
       version: 1,
       firstName,
@@ -1385,18 +1465,14 @@ export default function Home() {
       nameStyle,
       exportProfile: exportProfileId,
       composition,
-      activeBackdrop: activeBackdrop
-        ? { name: activeBackdrop.name, dataUrl: activeBackdrop.dataUrl }
-        : null,
-      activeSubject: activeSubject
-        ? { name: activeSubject.name, dataUrl: activeSubject.dataUrl }
-        : null,
+      activeBackdrop: serializedBackdrop,
+      activeSubject: serializedSubject,
     };
   }
 
   async function saveProject(): Promise<void> {
     if (supabaseConfigured === false) {
-      setStatus("Supabase is not configured for persistence in this environment.");
+      setStatus(projectPersistenceReason ?? "Remote project persistence is unavailable.");
       return;
     }
 
@@ -1408,10 +1484,11 @@ export default function Home() {
 
     setIsSavingProject(true);
     try {
+      const snapshot = await buildSnapshot();
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, snapshot: buildSnapshot() }),
+        body: JSON.stringify({ name, snapshot }),
       });
 
       if (!response.ok) {
@@ -1440,13 +1517,12 @@ export default function Home() {
       const payload = (await response.json()) as {
         projects?: StoredProjectSummary[];
         configured?: boolean;
+        reason?: string;
       };
       setSavedProjects(payload.projects ?? []);
       const configured = payload.configured !== false;
       setSupabaseConfigured(configured);
-      if (!configured) {
-        setStatus("Supabase not configured. Project save/load is disabled.");
-      }
+      setProjectPersistenceReason(payload.reason ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load projects.";
       setStatus(message);
@@ -1457,7 +1533,7 @@ export default function Home() {
 
   async function loadProject(projectId: string): Promise<void> {
     if (supabaseConfigured === false) {
-      setStatus("Supabase is not configured for persistence in this environment.");
+      setStatus(projectPersistenceReason ?? "Remote project persistence is unavailable.");
       return;
     }
 
@@ -1506,6 +1582,7 @@ export default function Home() {
       setNameStyle(snapshot.nameStyle);
       setExportProfileId(snapshot.exportProfile);
       setComposition(snapshot.composition);
+      setBatchItems([]);
       setProjectName(payload.project?.name ?? "Session");
       setStatus("Project loaded.");
     } catch (error) {
@@ -1696,7 +1773,7 @@ export default function Home() {
                 onClick={() => {
                   void saveProject();
                 }}
-                disabled={isSavingProject || supabaseConfigured === false}
+                disabled={isSavingProject || supabaseConfigured !== true}
               >
                 {isSavingProject ? "Saving..." : "Save"}
               </button>
@@ -1715,7 +1792,8 @@ export default function Home() {
               {supabaseConfigured === false ? (
                 <div className="asset-item">
                   <p className="text-[11px] text-[var(--text-soft)]">
-                    Configure Supabase env vars to enable project persistence.
+                    {projectPersistenceReason ??
+                      "Remote project persistence is unavailable in this environment."}
                   </p>
                 </div>
               ) : null}
@@ -1752,101 +1830,121 @@ export default function Home() {
             className="relative flex-1 overflow-hidden rounded-lg border border-[color:var(--panel-border)] bg-[radial-gradient(circle_at_top,_#2a2a39_0%,_#12121a_58%,_#0d0d12_100%)]"
           >
             {activeBackdrop ? (
-              <img
-                className="h-full w-full select-none object-contain"
-                src={activeBackdrop.objectUrl}
-                alt={activeBackdrop.name}
-                draggable={false}
-              />
+              <div
+                className="absolute overflow-hidden"
+                style={{
+                  left: backdropBox?.leftPx ?? 0,
+                  top: backdropBox?.topPx ?? 0,
+                  width: backdropBox?.widthPx ?? canvasSize.width,
+                  height: backdropBox?.heightPx ?? canvasSize.height,
+                }}
+              >
+                <img
+                  className="h-full w-full select-none object-contain"
+                  src={activeBackdrop.objectUrl}
+                  alt={activeBackdrop.name}
+                  draggable={false}
+                />
+
+                {showSafeArea && safeAreaBox ? (
+                  <div
+                    className="pointer-events-none absolute border border-dashed border-white/40"
+                    style={{
+                      left: safeAreaBox.leftPx - (backdropBox?.leftPx ?? 0),
+                      top: safeAreaBox.topPx - (backdropBox?.topPx ?? 0),
+                      width: safeAreaBox.widthPx,
+                      height: safeAreaBox.heightPx,
+                    }}
+                  />
+                ) : null}
+
+                {activeSubject ? (
+                  <>
+                    {composition.shadowEnabled ? (
+                      <div
+                        className="pointer-events-none absolute"
+                        style={{
+                          left: `${composition.xPct + shadowMetrics.shadowOffsetXPct}%`,
+                          top: `${composition.yPct + shadowMetrics.shadowOffsetYPct}%`,
+                          width: `${shadowMetrics.shadowWidthPct}%`,
+                          height: `${shadowMetrics.shadowHeightPct}%`,
+                          opacity: shadowMetrics.shadowOpacity,
+                          transform: `translate(-50%, -50%) rotate(${shadowMetrics.shadowAngleDeg}deg)`,
+                          background:
+                            "radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.48) 48%, rgba(0,0,0,0) 100%)",
+                          filter: `blur(${shadowMetrics.shadowBlurPx}px)`,
+                        }}
+                      />
+                    ) : null}
+
+                    {composition.reflectionEnabled && composition.reflectionSizePct > 0 ? (
+                      <img
+                        className="pointer-events-none absolute select-none"
+                        src={activeSubject.objectUrl}
+                        alt={`${activeSubject.name} reflection`}
+                        draggable={false}
+                        style={{
+                          left: `${composition.xPct}%`,
+                          top: `${reflectionTop}%`,
+                          height: `${reflectionHeight}%`,
+                          opacity: composition.reflectionOpacityPct / 100,
+                          filter: `blur(${composition.reflectionBlurPx}px)`,
+                          transform: "translate(-50%, 0) scaleY(-1)",
+                          maskImage:
+                            "linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent)",
+                          WebkitMaskImage:
+                            "linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent)",
+                        }}
+                      />
+                    ) : null}
+
+                    <img
+                      className="absolute cursor-grab select-none active:cursor-grabbing"
+                      src={activeSubject.objectUrl}
+                      alt={activeSubject.name}
+                      draggable={false}
+                      onPointerDown={onSubjectPointerDown}
+                      onPointerMove={onSubjectPointerMove}
+                      onPointerUp={onSubjectPointerUp}
+                      onPointerCancel={onSubjectPointerUp}
+                      style={{
+                        left: `${composition.xPct}%`,
+                        top: `${composition.yPct}%`,
+                        height: `${composition.subjectHeightPct}%`,
+                        transform: "translate(-50%, -100%)",
+                        maskImage: subjectFadeMask,
+                        WebkitMaskImage: subjectFadeMask,
+                      }}
+                    />
+
+                    {composition.fogEnabled ? (
+                      <div
+                        className="pointer-events-none absolute inset-x-0 bottom-0"
+                        style={{
+                          height: `${composition.fogHeightPct}%`,
+                          background: `linear-gradient(to top, rgba(234, 238, 255, ${fogOpacity.toFixed(3)}), rgba(234, 238, 255, 0))`,
+                          filter: "blur(8px)",
+                        }}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+
+                {nameOverlayPreviewUrl ? (
+                  <img
+                    className="pointer-events-none absolute inset-0 h-full w-full select-none"
+                    src={nameOverlayPreviewUrl}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                  />
+                ) : null}
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-[var(--text-soft)]">
                 Add a backdrop image to start.
               </div>
             )}
-
-            {showSafeArea && activeProfile.aspectRatio ? (
-              <div
-                className="pointer-events-none absolute border border-dashed border-white/35"
-                style={{
-                  left: `${safeAreaBox.leftPct}%`,
-                  top: `${safeAreaBox.topPct}%`,
-                  width: `${safeAreaBox.widthPct}%`,
-                  height: `${safeAreaBox.heightPct}%`,
-                }}
-              />
-            ) : null}
-
-            {activeSubject ? (
-              <>
-                {composition.shadowEnabled ? (
-                  <div
-                    className="pointer-events-none absolute"
-                    style={{
-                      left: `${composition.xPct + shadowMetrics.shadowOffsetXPct}%`,
-                      top: `${composition.yPct + shadowMetrics.shadowOffsetYPct}%`,
-                      width: `${shadowMetrics.shadowWidthPct}%`,
-                      height: `${shadowMetrics.shadowHeightPct}%`,
-                      opacity: shadowMetrics.shadowOpacity,
-                      transform: `translate(-50%, -50%) rotate(${shadowMetrics.shadowAngleDeg}deg)`,
-                      background:
-                        "radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.48) 48%, rgba(0,0,0,0) 100%)",
-                      filter: `blur(${shadowMetrics.shadowBlurPx}px)`,
-                    }}
-                  />
-                ) : null}
-
-                {composition.reflectionEnabled && composition.reflectionSizePct > 0 ? (
-                  <img
-                    className="pointer-events-none absolute select-none"
-                    src={activeSubject.objectUrl}
-                    alt={`${activeSubject.name} reflection`}
-                    draggable={false}
-                    style={{
-                      left: `${composition.xPct}%`,
-                      top: `${reflectionTop}%`,
-                      height: `${reflectionHeight}%`,
-                      opacity: composition.reflectionOpacityPct / 100,
-                      filter: `blur(${composition.reflectionBlurPx}px)`,
-                      transform: "translate(-50%, 0) scaleY(-1)",
-                      maskImage:
-                        "linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent)",
-                      WebkitMaskImage:
-                        "linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent)",
-                    }}
-                  />
-                ) : null}
-
-                <img
-                  className="absolute cursor-grab select-none active:cursor-grabbing"
-                  src={activeSubject.objectUrl}
-                  alt={activeSubject.name}
-                  draggable={false}
-                  onPointerDown={onSubjectPointerDown}
-                  onPointerMove={onSubjectPointerMove}
-                  onPointerUp={onSubjectPointerUp}
-                  onPointerCancel={onSubjectPointerUp}
-                  style={{
-                    left: `${composition.xPct}%`,
-                    top: `${composition.yPct}%`,
-                    height: `${composition.subjectHeightPct}%`,
-                    transform: "translate(-50%, -100%)",
-                    maskImage: subjectFadeMask,
-                    WebkitMaskImage: subjectFadeMask,
-                  }}
-                />
-
-                {composition.fogEnabled ? (
-                  <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0"
-                    style={{
-                      height: `${composition.fogHeightPct}%`,
-                      background: `linear-gradient(to top, rgba(234, 238, 255, ${fogOpacity.toFixed(3)}), rgba(234, 238, 255, 0))`,
-                      filter: "blur(8px)",
-                    }}
-                  />
-                ) : null}
-              </>
-            ) : null}
           </div>
         </section>
 
@@ -2229,6 +2327,7 @@ export default function Home() {
                 onClick={() => {
                   if (isBatchRunning) {
                     batchAbortRef.current = true;
+                    batchRequestAbortRef.current?.abort();
                     return;
                   }
                   setBatchItems([]);
