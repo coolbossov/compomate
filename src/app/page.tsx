@@ -51,6 +51,48 @@ type BatchItem = {
 
 const MAX_FILE_BYTES = 45 * 1024 * 1024;
 const MAX_FILES_PER_IMPORT = 120;
+const BACKDROP_POLL_INTERVAL_MS = 2200;
+const BACKDROP_MAX_POLLS = 180;
+
+type FalBackdropPendingPayload = {
+  pending: true;
+  requestId: string;
+  statusUrl: string;
+  responseUrl: string;
+  queuePosition: number | null;
+  model: string;
+};
+
+type FalBackdropCompletedPayload = {
+  pending: false;
+  dataUrl: string;
+  sourceUrl: string;
+  model: string;
+};
+
+function isFalBackdropPendingPayload(value: unknown): value is FalBackdropPendingPayload {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const payload = value as Partial<FalBackdropPendingPayload>;
+  return (
+    payload.pending === true &&
+    typeof payload.statusUrl === "string" &&
+    typeof payload.responseUrl === "string"
+  );
+}
+
+function isFalBackdropCompletedPayload(value: unknown): value is FalBackdropCompletedPayload {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const payload = value as Partial<FalBackdropCompletedPayload>;
+  return payload.pending === false && typeof payload.dataUrl === "string";
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function makeId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -1268,16 +1310,60 @@ export default function Home() {
         throw new Error(parseErrorText(text));
       }
 
-      const payload = (await response.json()) as {
-        dataUrl?: string;
-      };
-      if (!payload.dataUrl) {
-        throw new Error("Generation completed but no image was returned.");
+      const payload = (await response.json()) as unknown;
+      let completed: FalBackdropCompletedPayload | null = null;
+
+      if (isFalBackdropCompletedPayload(payload)) {
+        completed = payload;
+      } else if (isFalBackdropPendingPayload(payload)) {
+        let latest = payload;
+        const positionText =
+          latest.queuePosition === null ? "" : ` (queue ${latest.queuePosition})`;
+        setStatus(`Backdrop queued on fal${positionText}. Waiting for completion...`);
+
+        for (let attempt = 0; attempt < BACKDROP_MAX_POLLS; attempt += 1) {
+          await wait(BACKDROP_POLL_INTERVAL_MS);
+
+          const query = new URLSearchParams({
+            statusUrl: latest.statusUrl,
+            responseUrl: latest.responseUrl,
+          });
+          const pollResponse = await fetch(`/api/generate-backdrop?${query.toString()}`, {
+            cache: "no-store",
+          });
+
+          if (!pollResponse.ok) {
+            const text = await pollResponse.text();
+            throw new Error(parseErrorText(text));
+          }
+
+          const polledPayload = (await pollResponse.json()) as unknown;
+          if (isFalBackdropCompletedPayload(polledPayload)) {
+            completed = polledPayload;
+            break;
+          }
+          if (!isFalBackdropPendingPayload(polledPayload)) {
+            throw new Error("Unexpected fal polling response.");
+          }
+
+          latest = polledPayload;
+          const queueText =
+            latest.queuePosition === null ? "" : ` Queue ${latest.queuePosition}.`;
+          setStatus(`Waiting for fal generation...${queueText}`);
+        }
+      } else {
+        throw new Error("Unexpected response from backdrop generation.");
+      }
+
+      if (!completed?.dataUrl) {
+        throw new Error(
+          "Backdrop is still queued on fal. Try again in a moment to continue polling.",
+        );
       }
 
       const asset = await dataUrlToAsset(
         `fal_${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
-        payload.dataUrl,
+        completed.dataUrl,
       );
       registerAssets([asset]);
       setBackdrops((current) => [asset, ...current]);
