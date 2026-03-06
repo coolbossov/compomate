@@ -1,0 +1,126 @@
+# CompoMate — AI Agent Changelog
+
+> This file is maintained by AI agents (Claude, Codex, etc.) to track all changes made to the codebase.
+> Every agent that modifies the repo must update this file before committing.
+> Format: newest entries at the top.
+
+---
+
+## [Unreleased] — Branch: `feature/compomate-full-implementation`
+
+### Session: 2026-03-06 — Claude (claude-sonnet-4-6)
+
+#### Batch 1C — Constants extraction
+**Commit:** `feat: create src/lib/constants.ts`
+- Created `src/lib/constants.ts` (302 lines) — single source of truth for all magic numbers
+- Sections: export dimensions (always 4000×5000px, 300 DPI), crop safety zones, file limits, R2 config, backdrop generation, FAL AI models, canvas zoom/nudge, slider min/max bounds (15 controls), reflection, light wrap, MediaPipe, export toast, file naming with `buildExportFilename()`, font pairs, session storage keys, DB table names, color palette, layout dimensions, name overlay defaults, pose analysis constants, blend presets, shadow physics
+- Found and captured constants from actual `page.tsx` scan (auto-placement formulas, light detection, fog tint, shadow gradient stops, etc.)
+
+#### Batch 1B — Types extraction
+**Commit:** `feat: extract types to src/types/`
+- Created `src/types/index.ts` — barrel re-export
+- Created `src/types/files.ts` — `Asset`, `PoseAnalysis`, `PreviewRect`
+- Created `src/types/composition.ts` — re-exports `lib/shared/composition` + adds `CompositeSpec`, `NameOverlayConfig`, `FontPairId`, `FontPair`
+- Created `src/types/backdrop.ts` — `BackdropAsset`, `BackdropGenerationStatus`, `BackdropGenerationState`
+- Created `src/types/export.ts` — `BatchStatus`, `BatchItem`, `ExportQueueSummary`, FAL payload types + type guards
+- Created `src/types/session.ts` — `SessionSettings`, `Template`
+- Created `src/types/shortcuts.ts` — `ShortcutDef`, `SHORTCUTS` constant array
+- 0 TypeScript errors in new files
+
+#### Batch 1A — Infrastructure setup
+**Commit:** `feat: infrastructure — R2 bucket, Google Fonts, shadcn/ui, all new dependencies`
+- Created Cloudflare R2 bucket `compomate-uploads` (wnam / western North America) with CORS configured
+- **⚠️ ACTION REQUIRED:** R2 S3-compatible API tokens must be created via Cloudflare Dashboard UI (R2 → Manage R2 API Tokens). Add `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` to `.env.local` manually.
+- Downloaded 4 Google Fonts TTF files to `public/fonts/`: `GreatVibes-Regular.ttf` (91KB), `DancingScript-Regular.ttf` (51KB), `Montserrat-Bold.ttf` (48KB), `Oswald-Bold.ttf` (26KB)
+- Installed 426 new packages — key additions: `konva`, `react-konva`, `zustand`, `zundo`, `@uppy/core`, `@uppy/tus`, `@uppy/react`, `@uppy/dashboard`, `@mediapipe/tasks-vision`, `@sentry/nextjs`, `posthog-js`, `@vercel/analytics`, `@vercel/speed-insights`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `lucide-react`, `react-hook-form`, `zod`
+- Initialized shadcn/ui — installed components: `badge`, `button`, `dialog`, `dropdown-menu`, `input`, `separator`, `slider`, `sonner`, `switch`, `tabs`, `tooltip` → `src/components/ui/`
+- Created `src/lib/utils.ts` with `cn()` utility (clsx + tailwind-merge)
+- Build: ✓ compiled successfully
+
+#### Baseline snapshot
+**Commit:** `chore: baseline snapshot before full implementation`
+- Preserved original Codex-built codebase state before any modifications
+- Original: `page.tsx` (2345 lines), `api/export/route.ts` (731 lines), 6 npm dependencies
+
+---
+
+## [Codex Build] — Branch: `main`
+
+### Session: 2026-03-05 — Codex Agent
+
+#### Phase 1–7 Ship
+**Commit:** `2c4466c` — "feat: phases 1-7 ship"
+- Initial full implementation of CompoMate MVP
+- Three-column dark layout (`#0D0D12` bg, `#13131A` panels)
+- Subject drag-to-reposition with backdrop-relative coordinates
+- Reflection system (flip + opacity fade + uniform blur)
+- Shadow system (directional, elevation, stretch, blur controls)
+- Fog/haze blend effect
+- Leg fade gradient
+- Name overlay preview in canvas (SVG, shared client/server)
+- fal.ai Flux backdrop generation with request polling
+- Export pipeline via Sharp (PNG, 300 DPI metadata)
+- Batch export with ZIP download (JSZip)
+- Batch cancel with AbortController
+- Safe area overlay (dashed border for crop zone)
+- Auto placement based on pixel centroid pose analysis
+- Auto light direction detection from backdrop
+- Blend presets (soft/studio/dramatic)
+- Supabase project persistence with safety gate
+- Security headers in `next.config.ts`
+- Rate limiting on export route (in-memory)
+- Input dimension guardrails (`MAX_INPUT_PIXELS`, `MAX_INPUT_EDGE_PX`)
+
+#### Fix: fal.ai polling
+**Commit:** `18fb5f7` — "fix: poll fal backdrop jobs until image is ready"
+- Fixed backdrop generation to poll status URL until image is ready
+
+#### Fix: Vercel payload limit
+**Commit:** `1f1e6e6` — "fix: workaround vercel payload limit"
+- Client-side image downscaling to fit under Vercel 4.5MB body limit
+- ⚠️ Known issue: destroys print quality — will be replaced by R2 upload in feature branch
+
+---
+
+## Known Issues / Technical Debt (to be fixed in feature branch)
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| Export quality destroyed by client-side JPEG downscale | Critical | Replace with R2 presigned upload |
+| Export output too small (1200–2400px, not 4000×5000) | Critical | Fix `EXPORT_PROFILES` dimensions |
+| `page.tsx` is 2345 lines — entire app in one file | High | Extract to 15 components |
+| No undo/redo | High | Add Zustand + zundo |
+| No keyboard shortcuts | High | Implement shortcut system |
+| No react-konva (uses plain `<img>`) | High | Migrate canvas |
+| No MediaPipe (uses pixel centroid only) | Medium | Add WASM pose estimation |
+| Reflection blur is uniform, not progressive | Medium | Add 5-layer progressive blur |
+| No light wrap edge effect | Medium | Add Sharp pipeline step |
+| No `maxDuration = 300` on API routes | Medium | Add Fluid Compute config |
+| No Sentry / PostHog / Vercel Analytics | Medium | Add in root layout |
+| In-memory rate limiter (process-local) | Low | Replace with Upstash Redis or KV |
+| Supabase single table with JSONB blob | Low | Migrate to 4-table schema |
+
+---
+
+## Planned Work (Upcoming in this branch)
+
+### Batch 2 — Core Services
+- **WS-04** Zustand + zundo store (files, backdrop, composition, names, export, ui slices)
+- **WS-05** Sharp pipeline refactor → `src/lib/compositing/` (9 pure functions, progressive blur, light wrap, ICC sRGB, withoutEnlargement, always 4000×5000)
+- **WS-06** R2 upload service (presigned URLs, Uppy+tus client)
+
+### Batch 3 — Component Extraction
+- **WS-07** Extract `page.tsx` into 15 components across `src/components/layout/`, `src/components/panels/`, `src/components/workspace/`
+
+### Batch 4 — Feature Build
+- **WS-08+17** Export pipeline: maxDuration=300, waitUntil, R2 I/O, file naming, queue UI, approval gate
+- **WS-09+10+13** Canvas: MediaPipe WASM, react-konva, danger zone overlay
+- **WS-11+12** Keyboard shortcuts, name entry UX
+
+### Batch 5 — Integration & Polish
+- **WS-14+15+16** Backdrop library, templates, session management
+- **WS-18+19** Analytics, UI polish (shadcn migration, lucide icons, next/image)
+- **WS-20+21+22** Supabase schema, security hardening, next.config.ts
+
+### Batch 6 — Ship
+- Build, lint, visual QA, `/code-review`, deploy to Vercel
