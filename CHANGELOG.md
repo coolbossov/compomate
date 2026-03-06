@@ -10,6 +10,17 @@
 
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6)
 
+#### Batch 2F — R2 upload service
+**Commit:** `feat: R2 upload service — presigned URLs, client uploader, env validation`
+- Created `src/lib/server/env.ts` — `validateEnv()` / `getEnv()` (cached) / `getR2Env()` (null-safe R2 check); detects placeholder values like `<generate-at-cloudflare-dashboard>`
+- Created `src/lib/server/r2.ts` — S3-compatible R2 client; `getPresignedUploadUrl()`, `getPresignedDownloadUrl()`, `deleteR2Object()`; key generators `generateSubjectKey/BackdropKey/ExportKey()` with nanoid(8) + sanitization
+- Created `src/lib/client/uploader.ts` — `uploadFileToR2()` and `uploadBlobToR2()`; XHR-based direct-to-R2 PUT with `onProgress` callback; presign request to `/api/r2/presign`
+- Created `src/app/api/r2/presign/route.ts` — POST; validates purpose (`subject`/`backdrop`/`export`), MIME type (png/jpeg/tiff/webp), same-origin CORS; rate limited 100 req/min/IP; returns `{ uploadUrl, key, downloadUrl }`; graceful 503 if R2 creds missing
+- Created `src/app/api/r2/delete/route.ts` — DELETE; key prefix guard (subjects/, backdrops/, exports/ only); rate limited 60 req/min/IP; graceful 503 if R2 creds missing
+- Installed `nanoid` (pure ESM, ^5.x)
+- 0 TypeScript errors
+- **Note:** R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in `.env.local` still have placeholder values — generate at Cloudflare Dashboard → R2 → Manage R2 API Tokens
+
 #### Batch 1C — Constants extraction
 **Commit:** `feat: create src/lib/constants.ts`
 - Created `src/lib/constants.ts` (302 lines) — single source of truth for all magic numbers
