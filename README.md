@@ -23,6 +23,7 @@ CompoMate is a production-focused compositor for dance/gymnastics portraits.
   - input size guardrails
   - lightweight rate limiting per endpoint
   - stricter response errors
+  - multipart export transport with client-side image optimization to avoid Vercel payload limits
 - Production headers in `next.config.ts`
 
 ## Run

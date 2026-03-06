@@ -39,6 +39,10 @@ type PoseMetrics = {
 };
 
 const NAME_STYLE_SET = new Set<NameStyleId>(["classic", "outline", "modern"]);
+const PROFILE_ID_SET = new Set<ExportProfileId>(
+  Object.keys(EXPORT_PROFILES) as ExportProfileId[],
+);
+const MAX_BINARY_BYTES = 14_000_000;
 
 function estimateDataUrlBinaryBytes(dataUrl: string): number {
   const commaIndex = dataUrl.indexOf(",");
@@ -56,6 +60,103 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
     throw new Error("Invalid data URL input.");
   }
   return Buffer.from(match[2], "base64");
+}
+
+type ParsedExportInput = {
+  backdropBuffer: Buffer;
+  subjectBuffer: Buffer;
+  compositionInput: Partial<CompositionState> & { reflectionLengthPct?: number };
+  firstName: string | undefined;
+  lastName: string | undefined;
+  exportProfileId: ExportProfileId;
+  nameStyle: NameStyleId;
+};
+
+function parseExportProfileId(value: unknown): ExportProfileId {
+  if (typeof value === "string" && PROFILE_ID_SET.has(value as ExportProfileId)) {
+    return value as ExportProfileId;
+  }
+  return "original";
+}
+
+function parseNameStyle(value: unknown): NameStyleId {
+  if (typeof value === "string" && NAME_STYLE_SET.has(value as NameStyleId)) {
+    return value as NameStyleId;
+  }
+  return "classic";
+}
+
+function parseCompositionFromUnknown(
+  value: unknown,
+): Partial<CompositionState> & { reflectionLengthPct?: number } {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  return value as Partial<CompositionState> & { reflectionLengthPct?: number };
+}
+
+async function parseExportInput(request: NextRequest): Promise<ParsedExportInput> {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const backdrop = formData.get("backdrop");
+    const subject = formData.get("subject");
+    if (!(backdrop instanceof File) || !(subject instanceof File)) {
+      throw new Error("Missing backdrop or subject upload.");
+    }
+    if (backdrop.size > MAX_BINARY_BYTES || subject.size > MAX_BINARY_BYTES) {
+      throw new Error("Uploaded image exceeds server payload limits.");
+    }
+
+    let compositionInput: Partial<CompositionState> & { reflectionLengthPct?: number } = {};
+    const compositionRaw = formData.get("composition");
+    if (typeof compositionRaw === "string" && compositionRaw.trim()) {
+      try {
+        compositionInput = parseCompositionFromUnknown(JSON.parse(compositionRaw));
+      } catch {
+        throw new Error("Invalid composition payload.");
+      }
+    }
+
+    return {
+      backdropBuffer: Buffer.from(await backdrop.arrayBuffer()),
+      subjectBuffer: Buffer.from(await subject.arrayBuffer()),
+      compositionInput,
+      firstName:
+        typeof formData.get("firstName") === "string"
+          ? (formData.get("firstName") as string)
+          : undefined,
+      lastName:
+        typeof formData.get("lastName") === "string"
+          ? (formData.get("lastName") as string)
+          : undefined,
+      exportProfileId: parseExportProfileId(formData.get("exportProfile")),
+      nameStyle: parseNameStyle(formData.get("nameStyle")),
+    };
+  }
+
+  const body = (await request.json()) as ExportRequestBody;
+  if (!body.backdropDataUrl || !body.subjectDataUrl) {
+    throw new Error("Missing backdropDataUrl or subjectDataUrl in request body.");
+  }
+
+  if (estimateDataUrlBinaryBytes(body.backdropDataUrl) > MAX_DATA_URL_BYTES) {
+    throw new Error("Backdrop file is too large for export.");
+  }
+  if (estimateDataUrlBinaryBytes(body.subjectDataUrl) > MAX_DATA_URL_BYTES) {
+    throw new Error("Subject file is too large for export.");
+  }
+
+  return {
+    backdropBuffer: dataUrlToBuffer(body.backdropDataUrl),
+    subjectBuffer: dataUrlToBuffer(body.subjectDataUrl),
+    compositionInput: body.composition ?? {},
+    firstName: body.firstName,
+    lastName: body.lastName,
+    exportProfileId: parseExportProfileId(body.exportProfile),
+    nameStyle: parseNameStyle(body.nameStyle),
+  };
 }
 
 function escapeXml(value: string): string {
@@ -474,30 +575,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const body = (await request.json()) as ExportRequestBody;
-
-    if (!body.backdropDataUrl || !body.subjectDataUrl) {
-      return NextResponse.json(
-        { error: "Missing backdropDataUrl or subjectDataUrl in request body." },
-        { status: 400 },
-      );
-    }
-
-    if (estimateDataUrlBinaryBytes(body.backdropDataUrl) > MAX_DATA_URL_BYTES) {
-      return NextResponse.json(
-        { error: "Backdrop file is too large for export." },
-        { status: 413 },
-      );
-    }
-    if (estimateDataUrlBinaryBytes(body.subjectDataUrl) > MAX_DATA_URL_BYTES) {
-      return NextResponse.json(
-        { error: "Subject file is too large for export." },
-        { status: 413 },
-      );
-    }
-
-    const backdropBuffer = dataUrlToBuffer(body.backdropDataUrl);
-    const subjectBuffer = dataUrlToBuffer(body.subjectDataUrl);
+    const parsed = await parseExportInput(request);
+    const backdropBuffer = parsed.backdropBuffer;
+    const subjectBuffer = parsed.subjectBuffer;
 
     const backdropMeta = await sharp(backdropBuffer).metadata();
     const backdropWidth = backdropMeta.width;
@@ -506,7 +586,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new Error("Unable to read backdrop dimensions.");
     }
 
-    const compositionInput = body.composition ?? {};
+    const compositionInput = parsed.compositionInput;
     const composition: CompositionState = {
       ...INITIAL_COMPOSITION,
       ...compositionInput,
@@ -534,15 +614,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     composition.shadowStretchPct = clamp(composition.shadowStretchPct, 35, 250);
     composition.shadowBlurPx = clamp(composition.shadowBlurPx, 0, 40);
 
-    const exportProfileId =
-      typeof body.exportProfile === "string" && body.exportProfile in EXPORT_PROFILES
-        ? (body.exportProfile as ExportProfileId)
-        : "original";
-    const exportProfile = getExportProfile(exportProfileId);
-    const nameStyle =
-      typeof body.nameStyle === "string" && NAME_STYLE_SET.has(body.nameStyle as NameStyleId)
-        ? (body.nameStyle as NameStyleId)
-        : "classic";
+    const exportProfile = getExportProfile(parsed.exportProfileId);
+    const nameStyle = parsed.nameStyle;
 
     const targetSubjectHeight = clamp(
       Math.round(backdropHeight * (composition.subjectHeightPct / 100)),
@@ -651,8 +724,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const nameOverlay = buildNameOverlay(
       backdropWidth,
       backdropHeight,
-      body.firstName,
-      body.lastName,
+      parsed.firstName,
+      parsed.lastName,
       nameStyle,
     );
     if (nameOverlay) {
@@ -689,6 +762,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status =
+      message.includes("Missing ")
+        ? 400
+        : message.includes("too large")
+          ? 413
+          : message.includes("Invalid composition")
+            ? 400
+            : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

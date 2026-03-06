@@ -91,6 +91,119 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: mimeType });
 }
 
+function loadImageElement(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load image for export optimization."));
+    image.src = url;
+  });
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  mimeType: string,
+  quality?: number,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to encode image."));
+          return;
+        }
+        resolve(blob);
+      },
+      mimeType,
+      quality,
+    );
+  });
+}
+
+async function rasterizeForExport(
+  sourceUrl: string,
+  options: {
+    maxLongSide: number;
+    mimeType: string;
+    quality: number;
+  },
+): Promise<Blob> {
+  const image = await loadImageElement(sourceUrl);
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  const longSide = Math.max(width, height);
+  const scale = Math.min(1, options.maxLongSide / Math.max(1, longSide));
+
+  const targetWidth = Math.max(1, Math.round(width * scale));
+  const targetHeight = Math.max(1, Math.round(height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Canvas context unavailable.");
+  }
+  context.clearRect(0, 0, targetWidth, targetHeight);
+  context.drawImage(image, 0, 0, targetWidth, targetHeight);
+  return canvasToBlob(canvas, options.mimeType, options.quality);
+}
+
+async function prepareExportPayload(
+  backdrop: Asset,
+  subject: Asset,
+  exportProfile: ExportProfileId,
+): Promise<{
+  backdropBlob: Blob;
+  subjectBlob: Blob;
+  totalBytes: number;
+}> {
+  const profile = EXPORT_PROFILES[exportProfile];
+  const profileLongSide = profile.widthPx && profile.heightPx
+    ? Math.max(profile.widthPx, profile.heightPx)
+    : 3200;
+
+  let backdropLong = Math.round(profileLongSide * 1.55);
+  let subjectLong = Math.round(profileLongSide * 1.25);
+  let backdropQuality = 0.9;
+  let subjectQuality = 0.92;
+
+  let lastBackdropBlob = await rasterizeForExport(backdrop.objectUrl, {
+    maxLongSide: backdropLong,
+    mimeType: "image/jpeg",
+    quality: backdropQuality,
+  });
+  let lastSubjectBlob = await rasterizeForExport(subject.objectUrl, {
+    maxLongSide: subjectLong,
+    mimeType: "image/webp",
+    quality: subjectQuality,
+  });
+
+  let totalBytes = lastBackdropBlob.size + lastSubjectBlob.size;
+  const targetBudget = 3_700_000;
+
+  for (let attempt = 0; attempt < 5 && totalBytes > targetBudget; attempt += 1) {
+    backdropLong = Math.max(1400, Math.round(backdropLong * 0.87));
+    subjectLong = Math.max(1100, Math.round(subjectLong * 0.9));
+    backdropQuality = Math.max(0.64, backdropQuality - 0.06);
+    subjectQuality = Math.max(0.68, subjectQuality - 0.07);
+
+    lastBackdropBlob = await rasterizeForExport(backdrop.objectUrl, {
+      maxLongSide: backdropLong,
+      mimeType: "image/jpeg",
+      quality: backdropQuality,
+    });
+    lastSubjectBlob = await rasterizeForExport(subject.objectUrl, {
+      maxLongSide: subjectLong,
+      mimeType: "image/webp",
+      quality: subjectQuality,
+    });
+    totalBytes = lastBackdropBlob.size + lastSubjectBlob.size;
+  }
+
+  return { backdropBlob: lastBackdropBlob, subjectBlob: lastSubjectBlob, totalBytes };
+}
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -888,21 +1001,34 @@ export default function Home() {
     }
 
     setIsExporting(true);
-    setStatus("Rendering final image...");
+    setStatus("Preparing export payload...");
 
     try {
+      const optimized = await prepareExportPayload(
+        activeBackdrop,
+        activeSubject,
+        exportProfileId,
+      );
+
+      if (optimized.totalBytes > 4_200_000) {
+        throw new Error(
+          "Images are still too large for cloud export. Choose a smaller profile or lower source resolution.",
+        );
+      }
+
+      const formData = new FormData();
+      formData.append("backdrop", optimized.backdropBlob, "backdrop.jpg");
+      formData.append("subject", optimized.subjectBlob, "subject.webp");
+      formData.append("composition", JSON.stringify(composition));
+      formData.append("firstName", firstName);
+      formData.append("lastName", lastName);
+      formData.append("exportProfile", exportProfileId);
+      formData.append("nameStyle", nameStyle);
+
+      setStatus("Rendering final image...");
       const response = await fetch("/api/export", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          backdropDataUrl: activeBackdrop.dataUrl,
-          subjectDataUrl: activeSubject.dataUrl,
-          composition,
-          firstName,
-          lastName,
-          exportProfile: exportProfileId,
-          nameStyle,
-        }),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -1041,18 +1167,29 @@ export default function Home() {
         }
 
         try {
+          const optimized = await prepareExportPayload(
+            backdrop,
+            subject,
+            item.exportProfile,
+          );
+          if (optimized.totalBytes > 4_200_000) {
+            throw new Error(
+              "Item too large for cloud export. Use smaller source files or export profile.",
+            );
+          }
+
+          const formData = new FormData();
+          formData.append("backdrop", optimized.backdropBlob, "backdrop.jpg");
+          formData.append("subject", optimized.subjectBlob, "subject.webp");
+          formData.append("composition", JSON.stringify(item.composition));
+          formData.append("firstName", item.firstName);
+          formData.append("lastName", item.lastName);
+          formData.append("exportProfile", item.exportProfile);
+          formData.append("nameStyle", item.nameStyle);
+
           const response = await fetch("/api/export", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              backdropDataUrl: backdrop.dataUrl,
-              subjectDataUrl: subject.dataUrl,
-              composition: item.composition,
-              firstName: item.firstName,
-              lastName: item.lastName,
-              exportProfile: item.exportProfile,
-              nameStyle: item.nameStyle,
-            }),
+            body: formData,
           });
 
           if (!response.ok) {

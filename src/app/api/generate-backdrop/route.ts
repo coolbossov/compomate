@@ -11,9 +11,26 @@ type GenerateBackdropBody = {
 
 type JsonObject = Record<string, unknown>;
 
+type PendingFalJob = {
+  pending: true;
+  requestId: string;
+  statusUrl: string;
+  responseUrl: string;
+  queuePosition: number | null;
+  model: string;
+};
+
+type CompletedFalJob = {
+  pending: false;
+  dataUrl: string;
+  sourceUrl: string;
+  model: string;
+};
+
 const DEFAULT_MODEL = process.env.FAL_MODEL ?? "fal-ai/flux/schnell";
+const QUEUE_BASE = "https://queue.fal.run/";
 const POLL_INTERVAL_MS = 1800;
-const MAX_POLLS = 25;
+const MAX_SYNC_POLLS = 8;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,6 +83,14 @@ function extractImageUrl(payload: unknown): string | null {
   return null;
 }
 
+function normalizeQueueUrl(value: string | undefined, fallback: string): string {
+  const resolved = (value ?? fallback).trim();
+  if (!resolved.startsWith(QUEUE_BASE)) {
+    throw new Error("Invalid fal queue URL.");
+  }
+  return resolved;
+}
+
 async function falRequest(
   url: string,
   key: string,
@@ -105,17 +130,24 @@ async function fetchToDataUrl(imageUrl: string): Promise<string> {
   return `data:${mimeType};base64,${binary.toString("base64")}`;
 }
 
-async function generateWithFal(
+function extractStatusState(payload: JsonObject): string {
+  return String(
+    payload.status ?? payload.state ?? payload.request_status ?? "",
+  ).toLowerCase();
+}
+
+function extractQueuePosition(payload: JsonObject): number | null {
+  const value = payload.queue_position;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+async function submitFalJob(
   prompt: string,
   styleHint: string | undefined,
   aspectMode: GenerateBackdropBody["aspectMode"],
-): Promise<{ dataUrl: string; sourceUrl: string; model: string }> {
-  const falKey = process.env.FAL_KEY;
-  if (!falKey) {
-    throw new Error("FAL_KEY is missing. Add it to .env.local.");
-  }
-
-  const endpoint = `https://queue.fal.run/${DEFAULT_MODEL}`;
+  key: string,
+): Promise<PendingFalJob | CompletedFalJob> {
+  const endpoint = `${QUEUE_BASE}${DEFAULT_MODEL}`;
   const finalPrompt = styleHint ? `${prompt}\nStyle: ${styleHint}` : prompt;
 
   const primaryPayload: JsonObject = {
@@ -123,10 +155,10 @@ async function generateWithFal(
     num_images: 1,
     image_size: resolveImageSize(aspectMode),
   };
-  let enqueue = await falRequest(endpoint, falKey, primaryPayload);
+
+  let enqueue = await falRequest(endpoint, key, primaryPayload);
   if (!enqueue.ok) {
-    // Retry with a minimal payload for models that reject image_size or num_images.
-    enqueue = await falRequest(endpoint, falKey, { prompt: finalPrompt });
+    enqueue = await falRequest(endpoint, key, { prompt: finalPrompt });
   }
   if (!enqueue.ok) {
     const message =
@@ -139,6 +171,7 @@ async function generateWithFal(
   const directImage = extractImageUrl(enqueue.data);
   if (directImage) {
     return {
+      pending: false,
       dataUrl: await fetchToDataUrl(directImage),
       sourceUrl: directImage,
       model: DEFAULT_MODEL,
@@ -152,53 +185,121 @@ async function generateWithFal(
     throw new Error("fal response did not include a request id.");
   }
 
-  const statusUrl =
-    (enqueue.data.status_url as string | undefined) ??
-    `${endpoint}/requests/${requestId}/status`;
-  const resultUrlTemplate = `${endpoint}/requests/${requestId}`;
+  const statusUrl = normalizeQueueUrl(
+    enqueue.data.status_url as string | undefined,
+    `${endpoint}/requests/${requestId}/status`,
+  );
+  const responseUrl = normalizeQueueUrl(
+    enqueue.data.response_url as string | undefined,
+    `${endpoint}/requests/${requestId}`,
+  );
 
-  for (let attempt = 0; attempt < MAX_POLLS; attempt += 1) {
-    await sleep(POLL_INTERVAL_MS);
-    const statusData = await fetchJson(statusUrl, falKey);
-    const status = String(
-      statusData.status ?? statusData.state ?? statusData.request_status ?? "",
-    ).toLowerCase();
+  return {
+    pending: true,
+    requestId,
+    statusUrl,
+    responseUrl,
+    queuePosition: extractQueuePosition(enqueue.data),
+    model: DEFAULT_MODEL,
+  };
+}
 
-    if (status.includes("fail") || status.includes("error")) {
-      throw new Error("fal generation failed.");
-    }
+async function pollFalJob(
+  key: string,
+  statusUrl: string,
+  responseUrl: string,
+): Promise<PendingFalJob | CompletedFalJob> {
+  const statusData = await fetchJson(statusUrl, key);
+  const state = extractStatusState(statusData);
 
-    const statusImage = extractImageUrl(statusData);
-    if (statusImage) {
-      return {
-        dataUrl: await fetchToDataUrl(statusImage),
-        sourceUrl: statusImage,
-        model: DEFAULT_MODEL,
-      };
-    }
-
-    if (status.includes("complete") || status.includes("succeed") || status === "done") {
-      const responseUrl =
-        (statusData.response_url as string | undefined) ?? resultUrlTemplate;
-      const resultData = await fetchJson(responseUrl, falKey);
-      const imageUrl = extractImageUrl(resultData);
-      if (!imageUrl) {
-        throw new Error("fal generation completed but no image URL was returned.");
-      }
-      return {
-        dataUrl: await fetchToDataUrl(imageUrl),
-        sourceUrl: imageUrl,
-        model: DEFAULT_MODEL,
-      };
-    }
+  if (state.includes("fail") || state.includes("error")) {
+    throw new Error("fal generation failed.");
   }
 
-  throw new Error("fal generation timed out. Try again with a shorter prompt.");
+  const statusImage = extractImageUrl(statusData);
+  if (statusImage) {
+    return {
+      pending: false,
+      dataUrl: await fetchToDataUrl(statusImage),
+      sourceUrl: statusImage,
+      model: DEFAULT_MODEL,
+    };
+  }
+
+  if (state.includes("complete") || state.includes("succeed") || state === "done") {
+    const resultData = await fetchJson(responseUrl, key);
+    const imageUrl = extractImageUrl(resultData);
+    if (!imageUrl) {
+      throw new Error("fal generation completed but no image URL was returned.");
+    }
+    return {
+      pending: false,
+      dataUrl: await fetchToDataUrl(imageUrl),
+      sourceUrl: imageUrl,
+      model: DEFAULT_MODEL,
+    };
+  }
+
+  return {
+    pending: true,
+    requestId:
+      (statusData.request_id as string | undefined) ??
+      statusUrl.split("/").at(-2) ??
+      "unknown",
+    statusUrl,
+    responseUrl,
+    queuePosition: extractQueuePosition(statusData),
+    model: DEFAULT_MODEL,
+  };
+}
+
+function getFalKey(): string {
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) {
+    throw new Error("FAL_KEY is missing. Add it to .env.local.");
+  }
+  return falKey;
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const ip = requestIp(request.headers);
+  const limit = checkRateLimit(`fal:poll:${ip}`, 180, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit reached for polling. Please slow down and retry." },
+      { status: 429 },
+    );
+  }
+
+  try {
+    const falKey = getFalKey();
+    const statusUrlRaw = request.nextUrl.searchParams.get("statusUrl") ?? undefined;
+    const responseUrlRaw = request.nextUrl.searchParams.get("responseUrl") ?? undefined;
+
+    if (!statusUrlRaw) {
+      return NextResponse.json({ error: "Missing statusUrl query parameter." }, { status: 400 });
+    }
+
+    const statusUrl = normalizeQueueUrl(statusUrlRaw, statusUrlRaw);
+    const responseUrl = normalizeQueueUrl(
+      responseUrlRaw,
+      statusUrl.replace(/\/status$/, ""),
+    );
+
+    const result = await pollFalJob(falKey, statusUrl, responseUrl);
+    if (result.pending) {
+      return NextResponse.json(result, { status: 202 });
+    }
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Backdrop polling failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`fal:${ip}`, 10, 60_000);
+  const limit = checkRateLimit(`fal:create:${ip}`, 10, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Rate limit reached for generation. Wait a minute and retry." },
@@ -207,6 +308,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    const falKey = getFalKey();
     const body = (await request.json()) as GenerateBackdropBody;
     const prompt = (body.prompt ?? "").trim();
     if (!prompt) {
@@ -219,15 +321,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const result = await generateWithFal(
+    const enqueue = await submitFalJob(
       prompt,
       body.styleHint?.trim(),
       body.aspectMode ?? "portrait",
+      falKey,
     );
-    return NextResponse.json(result);
+
+    if (!enqueue.pending) {
+      return NextResponse.json(enqueue, { status: 200 });
+    }
+
+    let latest = enqueue;
+    for (let attempt = 0; attempt < MAX_SYNC_POLLS; attempt += 1) {
+      await sleep(POLL_INTERVAL_MS);
+      const polled = await pollFalJob(falKey, latest.statusUrl, latest.responseUrl);
+      if (!polled.pending) {
+        return NextResponse.json(polled, { status: 200 });
+      }
+      latest = polled;
+    }
+
+    return NextResponse.json(latest, { status: 202 });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Backdrop generation failed.";
+    const message = error instanceof Error ? error.message : "Backdrop generation failed.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
