@@ -1,0 +1,233 @@
+import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+
+export const runtime = "nodejs";
+
+type GenerateBackdropBody = {
+  prompt?: string;
+  styleHint?: string;
+  aspectMode?: "portrait" | "landscape" | "square";
+};
+
+type JsonObject = Record<string, unknown>;
+
+const DEFAULT_MODEL = process.env.FAL_MODEL ?? "fal-ai/flux/schnell";
+const POLL_INTERVAL_MS = 1800;
+const MAX_POLLS = 25;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveImageSize(aspectMode: GenerateBackdropBody["aspectMode"]): string {
+  if (aspectMode === "square") {
+    return "square_hd";
+  }
+  if (aspectMode === "landscape") {
+    return "landscape_4_3";
+  }
+  return "portrait_4_3";
+}
+
+function extractImageUrl(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const value = payload as JsonObject;
+
+  const candidateArrays = [value.images, value.output, value.results];
+  for (const candidateArray of candidateArrays) {
+    if (Array.isArray(candidateArray)) {
+      for (const item of candidateArray) {
+        if (item && typeof item === "object") {
+          const url = (item as JsonObject).url;
+          if (typeof url === "string" && url.startsWith("http")) {
+            return url;
+          }
+        }
+      }
+    }
+  }
+
+  const candidateObjects = [value.image, value.data];
+  for (const candidate of candidateObjects) {
+    if (candidate && typeof candidate === "object") {
+      const direct = (candidate as JsonObject).url;
+      if (typeof direct === "string" && direct.startsWith("http")) {
+        return direct;
+      }
+      const nested = extractImageUrl(candidate);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function falRequest(
+  url: string,
+  key: string,
+  payload: JsonObject,
+): Promise<{ ok: boolean; data: JsonObject; status: number }> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  const data = (await response.json().catch(() => ({}))) as JsonObject;
+  return { ok: response.ok, data, status: response.status };
+}
+
+async function fetchJson(url: string, key: string): Promise<JsonObject> {
+  const response = await fetch(url, {
+    headers: { Authorization: `Key ${key}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`fal polling failed (${response.status}).`);
+  }
+  return (await response.json()) as JsonObject;
+}
+
+async function fetchToDataUrl(imageUrl: string): Promise<string> {
+  const response = await fetch(imageUrl, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Generated image download failed (${response.status}).`);
+  }
+  const mimeType = response.headers.get("content-type") ?? "image/png";
+  const binary = Buffer.from(await response.arrayBuffer());
+  return `data:${mimeType};base64,${binary.toString("base64")}`;
+}
+
+async function generateWithFal(
+  prompt: string,
+  styleHint: string | undefined,
+  aspectMode: GenerateBackdropBody["aspectMode"],
+): Promise<{ dataUrl: string; sourceUrl: string; model: string }> {
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) {
+    throw new Error("FAL_KEY is missing. Add it to .env.local.");
+  }
+
+  const endpoint = `https://queue.fal.run/${DEFAULT_MODEL}`;
+  const finalPrompt = styleHint ? `${prompt}\nStyle: ${styleHint}` : prompt;
+
+  const primaryPayload: JsonObject = {
+    prompt: finalPrompt,
+    num_images: 1,
+    image_size: resolveImageSize(aspectMode),
+  };
+  let enqueue = await falRequest(endpoint, falKey, primaryPayload);
+  if (!enqueue.ok) {
+    // Retry with a minimal payload for models that reject image_size or num_images.
+    enqueue = await falRequest(endpoint, falKey, { prompt: finalPrompt });
+  }
+  if (!enqueue.ok) {
+    const message =
+      typeof enqueue.data.detail === "string"
+        ? enqueue.data.detail
+        : `fal request failed (${enqueue.status}).`;
+    throw new Error(message);
+  }
+
+  const directImage = extractImageUrl(enqueue.data);
+  if (directImage) {
+    return {
+      dataUrl: await fetchToDataUrl(directImage),
+      sourceUrl: directImage,
+      model: DEFAULT_MODEL,
+    };
+  }
+
+  const requestId =
+    (enqueue.data.request_id as string | undefined) ??
+    (enqueue.data.id as string | undefined);
+  if (!requestId) {
+    throw new Error("fal response did not include a request id.");
+  }
+
+  const statusUrl =
+    (enqueue.data.status_url as string | undefined) ??
+    `${endpoint}/requests/${requestId}/status`;
+  const resultUrlTemplate = `${endpoint}/requests/${requestId}`;
+
+  for (let attempt = 0; attempt < MAX_POLLS; attempt += 1) {
+    await sleep(POLL_INTERVAL_MS);
+    const statusData = await fetchJson(statusUrl, falKey);
+    const status = String(
+      statusData.status ?? statusData.state ?? statusData.request_status ?? "",
+    ).toLowerCase();
+
+    if (status.includes("fail") || status.includes("error")) {
+      throw new Error("fal generation failed.");
+    }
+
+    const statusImage = extractImageUrl(statusData);
+    if (statusImage) {
+      return {
+        dataUrl: await fetchToDataUrl(statusImage),
+        sourceUrl: statusImage,
+        model: DEFAULT_MODEL,
+      };
+    }
+
+    if (status.includes("complete") || status.includes("succeed") || status === "done") {
+      const responseUrl =
+        (statusData.response_url as string | undefined) ?? resultUrlTemplate;
+      const resultData = await fetchJson(responseUrl, falKey);
+      const imageUrl = extractImageUrl(resultData);
+      if (!imageUrl) {
+        throw new Error("fal generation completed but no image URL was returned.");
+      }
+      return {
+        dataUrl: await fetchToDataUrl(imageUrl),
+        sourceUrl: imageUrl,
+        model: DEFAULT_MODEL,
+      };
+    }
+  }
+
+  throw new Error("fal generation timed out. Try again with a shorter prompt.");
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const ip = requestIp(request.headers);
+  const limit = checkRateLimit(`fal:${ip}`, 10, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit reached for generation. Wait a minute and retry." },
+      { status: 429 },
+    );
+  }
+
+  try {
+    const body = (await request.json()) as GenerateBackdropBody;
+    const prompt = (body.prompt ?? "").trim();
+    if (!prompt) {
+      return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+    }
+    if (prompt.length > 700) {
+      return NextResponse.json(
+        { error: "Prompt is too long. Keep it under 700 characters." },
+        { status: 400 },
+      );
+    }
+
+    const result = await generateWithFal(
+      prompt,
+      body.styleHint?.trim(),
+      body.aspectMode ?? "portrait",
+    );
+    return NextResponse.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Backdrop generation failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

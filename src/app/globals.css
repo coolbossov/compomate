@@ -1,26 +1,169 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-sans-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono-ui: "SF Mono", "Menlo", "Consolas", monospace;
+  --studio-bg: #0d0d12;
+  --panel-bg: #13131a;
+  --input-bg: #1a1a24;
+  --panel-border: rgba(99, 103, 255, 0.24);
+  --brand-primary: #6367ff;
+  --brand-secondary: #8494ff;
+  --brand-soft: #c9beff;
+  --brand-warm: #ffdbfd;
+  --text-primary: #ffffff;
+  --text-soft: #a0a0b8;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-sans-ui);
+  --font-mono: var(--font-mono-ui);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: radial-gradient(circle at 30% 10%, #222235 0%, #0d0d12 45%);
+  color: var(--text-primary);
+  font-family: var(--font-sans-ui);
+}
+
+.panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(26, 26, 36, 0.96), rgba(19, 19, 26, 0.98));
+  padding: 14px;
+  min-height: 0;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 0.84rem;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  color: var(--brand-soft);
+}
+
+.panel-meta {
+  display: inline-flex;
+  min-width: 24px;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  color: var(--brand-warm);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 10px;
+  padding: 0.62rem 0.92rem;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  color: white;
+  font-weight: 600;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.btn-primary:hover:enabled {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.65;
+}
+
+.btn-secondary {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 0.5rem 0.72rem;
+  background: rgba(99, 103, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.btn-secondary:hover {
+  border-color: color-mix(in srgb, var(--brand-primary) 60%, transparent);
+  background: rgba(99, 103, 255, 0.16);
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  padding: 0.56rem 0.7rem;
+  font-size: 0.86rem;
+}
+
+.input::placeholder {
+  color: color-mix(in srgb, var(--brand-soft) 70%, transparent);
+}
+
+.input:focus {
+  outline: 1px solid color-mix(in srgb, var(--brand-primary) 70%, white 10%);
+  outline-offset: 0;
+}
+
+.asset-list {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.asset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.75rem;
+}
+
+.asset-item:hover {
+  border-color: color-mix(in srgb, var(--brand-secondary) 55%, transparent);
+}
+
+.asset-item-active {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-warm) 55%, transparent);
+  background: rgba(132, 148, 255, 0.14);
+}
+
+.asset-select {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: left;
+}
+
+.asset-remove {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 0.18rem 0.45rem;
+  font-size: 0.68rem;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+}
+
+.asset-remove:hover {
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--brand-warm) 70%, transparent);
+}
+
+@media (max-width: 1180px) {
+  main {
+    grid-template-columns: 1fr;
+    height: auto !important;
+  }
 }
