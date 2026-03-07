@@ -31,6 +31,7 @@ export interface BackdropSlice {
   generation: BackdropGenerationState;
   addBackdrop: (asset: BackdropAsset) => void;
   removeBackdrop: (id: string) => void;
+  updateBackdrop: (id: string, patch: Partial<BackdropAsset>) => void;
   setActiveBackdrop: (id: string | null) => void;
   setGeneration: (state: Partial<BackdropGenerationState>) => void;
   resetGeneration: () => void;

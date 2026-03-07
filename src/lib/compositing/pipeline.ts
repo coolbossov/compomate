@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { clamp, wrapDegrees } from '@/lib/shared/composition';
 import { EXPORT_DPI } from '@/lib/constants';
 import { normalizeSubject, normalizeBackdrop } from './normalize';
-import { analyzeSubjectPose, calculatePlacement } from './placement';
+import { calculatePlacement } from './placement';
 import { defringeSubject } from './defringe';
 import { applyLightWrap } from './lightwrap';
 import { createReflection } from './reflect';

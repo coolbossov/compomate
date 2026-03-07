@@ -6,7 +6,7 @@
 import type { Asset } from '@/types/files';
 import type { BackdropAsset } from '@/types/backdrop';
 import type { ExportProfileId } from '@/lib/shared/composition';
-import { EXPORT_PROFILES, type CompositionState } from '@/lib/shared/composition';
+import { EXPORT_PROFILES } from '@/lib/shared/composition';
 import {
   MAX_FILE_BYTES,
   MAX_FILES_PER_IMPORT,

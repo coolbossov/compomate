@@ -23,25 +23,66 @@ import {
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type Konva from 'konva';
 
+type LoadedImage = {
+  src: string;
+  image: HTMLImageElement;
+};
+
+interface CompositeStageProps {
+  width: number;
+  height: number;
+  stageScale: number;
+  handleWheel: (e: KonvaEventObject<WheelEvent>) => void;
+  backdropImg: HTMLImageElement | null;
+  subjectImg: HTMLImageElement | null;
+  subjectNodeRef: React.RefObject<Konva.Image | null>;
+  transformerRef: React.RefObject<Konva.Transformer | null>;
+  subjectX: number;
+  subjectY: number;
+  subjectW: number;
+  subjectH: number;
+  subjectFeetY: number;
+  reflectionEnabled: boolean;
+  reflectionOpacity: number;
+  handleDragEnd: (e: KonvaEventObject<DragEvent>) => void;
+  dangerZoneRects: Array<{
+    label: string;
+    zoneX: number;
+    zoneY: number;
+    zoneW: number;
+    zoneH: number;
+  }>;
+  scale: number;
+}
+
 // ---------------------------------------------------------------------------
 // Image loading hook — manual HTMLImageElement, no SSR issues
 // ---------------------------------------------------------------------------
 function useKonvaImg(src?: string): HTMLImageElement | null {
-  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [loaded, setLoaded] = useState<LoadedImage | null>(null);
   useEffect(() => {
-    if (!src) {
-      setImg(null);
-      return;
-    }
+    if (!src) return;
+
+    let cancelled = false;
     const i = new window.Image();
     i.crossOrigin = 'anonymous';
-    i.onload = () => setImg(i);
+    i.onload = () => {
+      if (!cancelled) {
+        setLoaded({ src, image: i });
+      }
+    };
     i.src = src;
     return () => {
+      cancelled = true;
       i.onload = null;
     };
   }, [src]);
-  return img;
+
+  if (loaded && loaded.src === src) {
+    return loaded.image;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +91,97 @@ function useKonvaImg(src?: string): HTMLImageElement | null {
 interface KonvaCanvasProps {
   containerWidth: number;
   containerHeight: number;
+}
+
+function CompositeStage({
+  width,
+  height,
+  stageScale,
+  handleWheel,
+  backdropImg,
+  subjectImg,
+  subjectNodeRef,
+  transformerRef,
+  subjectX,
+  subjectY,
+  subjectW,
+  subjectH,
+  subjectFeetY,
+  reflectionEnabled,
+  reflectionOpacity,
+  handleDragEnd,
+  dangerZoneRects,
+  scale,
+}: CompositeStageProps) {
+  return (
+    <Stage
+      width={width}
+      height={height}
+      scaleX={stageScale}
+      scaleY={stageScale}
+      onWheel={handleWheel}
+    >
+      <Layer>
+        {backdropImg && (
+          <KonvaImage
+            image={backdropImg}
+            x={0}
+            y={0}
+            width={EXPORT_WIDTH_PX}
+            height={EXPORT_HEIGHT_PX}
+          />
+        )}
+
+        {subjectImg && reflectionEnabled && (
+          <KonvaImage
+            image={subjectImg}
+            x={subjectX}
+            y={subjectFeetY + subjectH}
+            width={subjectW}
+            height={subjectH}
+            scaleY={-1}
+            opacity={reflectionOpacity}
+            listening={false}
+          />
+        )}
+
+        {subjectImg && (
+          <KonvaImage
+            ref={subjectNodeRef}
+            image={subjectImg}
+            x={subjectX}
+            y={subjectY}
+            width={subjectW}
+            height={subjectH}
+            draggable
+            onDragEnd={handleDragEnd}
+          />
+        )}
+
+        {subjectImg && (
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled={false}
+            boundBoxFunc={(_oldBox, newBox) => newBox}
+          />
+        )}
+
+        {dangerZoneRects.map(({ label, zoneX, zoneY, zoneW, zoneH }) => (
+          <Rect
+            key={label}
+            x={zoneX}
+            y={zoneY}
+            width={zoneW}
+            height={zoneH}
+            stroke={label === '4x6' ? '#FF4444' : '#FF8800'}
+            strokeWidth={4 / scale}
+            dash={[20 / scale, 10 / scale]}
+            listening={false}
+          />
+        ))}
+      </Layer>
+    </Stage>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -183,95 +315,6 @@ export default function KonvaCanvas({
     : [];
 
   // ---------------------------------------------------------------------------
-  // Composite stage content (shared between normal and side-by-side right)
-  // ---------------------------------------------------------------------------
-  function CompositeStage({
-    width,
-    height,
-    stageScale,
-  }: {
-    width: number;
-    height: number;
-    stageScale: number;
-  }) {
-    return (
-      <Stage
-        width={width}
-        height={height}
-        scaleX={stageScale}
-        scaleY={stageScale}
-        onWheel={handleWheel}
-      >
-        <Layer>
-          {/* Backdrop */}
-          {backdropImg && (
-            <KonvaImage
-              image={backdropImg}
-              x={0}
-              y={0}
-              width={EXPORT_WIDTH_PX}
-              height={EXPORT_HEIGHT_PX}
-            />
-          )}
-
-          {/* Reflection — scaleY:-1 flips image around its top-left y,
-              so set y = feetY + subjectH so the flipped image spans
-              [feetY, feetY + subjectH] going downward */}
-          {subject && subjectImg && composition.reflectionEnabled && (
-            <KonvaImage
-              image={subjectImg}
-              x={subjectX}
-              y={subjectFeetY + subjectH}
-              width={subjectW}
-              height={subjectH}
-              scaleY={-1}
-              opacity={composition.reflectionOpacityPct / 100}
-              listening={false}
-            />
-          )}
-
-          {/* Subject — draggable + Transformer */}
-          {subject && subjectImg && (
-            <KonvaImage
-              ref={subjectNodeRef}
-              image={subjectImg}
-              x={subjectX}
-              y={subjectY}
-              width={subjectW}
-              height={subjectH}
-              draggable
-              onDragEnd={handleDragEnd}
-            />
-          )}
-
-          {subject && subjectImg && (
-            <Transformer
-              ref={transformerRef}
-              rotateEnabled={false}
-              boundBoxFunc={(_oldBox, newBox) => newBox}
-            />
-          )}
-
-          {/* Danger zone overlays */}
-          {dangerZoneRects.map(({ label, zoneX, zoneY, zoneW, zoneH }) => (
-            <Rect
-              key={label}
-              x={zoneX}
-              y={zoneY}
-              width={zoneW}
-              height={zoneH}
-              stroke={label === '4x6' ? '#FF4444' : '#FF8800'}
-              strokeWidth={4 / scale}
-              dash={[20 / scale, 10 / scale]}
-              listening={false}
-            />
-          ))}
-        </Layer>
-      </Stage>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
   // Side-by-side mode
   // ---------------------------------------------------------------------------
   if (showSideBySide && subject && backdrop) {
@@ -316,6 +359,21 @@ export default function KonvaCanvas({
             width={halfW}
             height={containerHeight}
             stageScale={sideScale}
+            handleWheel={handleWheel}
+            backdropImg={backdropImg}
+            subjectImg={subjectImg}
+            subjectNodeRef={subjectNodeRef}
+            transformerRef={transformerRef}
+            subjectX={subjectX}
+            subjectY={subjectY}
+            subjectW={subjectW}
+            subjectH={subjectH}
+            subjectFeetY={subjectFeetY}
+            reflectionEnabled={composition.reflectionEnabled}
+            reflectionOpacity={composition.reflectionOpacityPct / 100}
+            handleDragEnd={handleDragEnd}
+            dangerZoneRects={dangerZoneRects}
+            scale={scale}
           />
         </div>
       </div>
@@ -330,6 +388,21 @@ export default function KonvaCanvas({
       width={containerWidth}
       height={containerHeight}
       stageScale={scale * canvasZoom}
+      handleWheel={handleWheel}
+      backdropImg={backdropImg}
+      subjectImg={subjectImg}
+      subjectNodeRef={subjectNodeRef}
+      transformerRef={transformerRef}
+      subjectX={subjectX}
+      subjectY={subjectY}
+      subjectW={subjectW}
+      subjectH={subjectH}
+      subjectFeetY={subjectFeetY}
+      reflectionEnabled={composition.reflectionEnabled}
+      reflectionOpacity={composition.reflectionOpacityPct / 100}
+      handleDragEnd={handleDragEnd}
+      dangerZoneRects={dangerZoneRects}
+      scale={scale}
     />
   );
 }

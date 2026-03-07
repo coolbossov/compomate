@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { AppState, UISlice } from '../types';
-import { CANVAS_MIN_ZOOM, EXPORT_TOAST_DURATION_MS } from '@/lib/constants';
+import { CANVAS_MIN_ZOOM, CANVAS_MAX_ZOOM, EXPORT_TOAST_DURATION_MS } from '@/lib/constants';
 
 export type UISliceCreator = StateCreator<
   AppState,
@@ -46,7 +46,7 @@ export const createUISlice: UISliceCreator = (set, get) => ({
 
   setCanvasZoom: (zoom: number) =>
     set((draft) => {
-      draft.canvasZoom = zoom;
+      draft.canvasZoom = Math.max(CANVAS_MIN_ZOOM, Math.min(CANVAS_MAX_ZOOM, zoom));
     }),
 
   showToast: (message: string, durationMs = EXPORT_TOAST_DURATION_MS) => {

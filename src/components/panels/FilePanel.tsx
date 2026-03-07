@@ -4,7 +4,7 @@
 import { useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { useSubjects } from '@/lib/store/selectors';
-import { filesToAssets, collectImageFiles, isImageFile } from '@/lib/client/utils';
+import { filesToAssets, collectImageFiles } from '@/lib/client/utils';
 import { computeAutoPlacement } from '@/lib/client/autoPlacement';
 
 export function FilePanel() {

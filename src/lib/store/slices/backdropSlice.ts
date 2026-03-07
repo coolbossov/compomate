@@ -41,6 +41,12 @@ export const createBackdropSlice: BackdropSliceCreator = (set) => ({
       }
     }),
 
+  updateBackdrop: (id: string, patch: Partial<BackdropAsset>) =>
+    set((draft) => {
+      const backdrop = draft.backdrops.find((b: BackdropAsset) => b.id === id);
+      if (backdrop) Object.assign(backdrop, patch);
+    }),
+
   setActiveBackdrop: (id: string | null) =>
     set((draft) => {
       draft.activeBackdropId = id;

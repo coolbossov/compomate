@@ -9,7 +9,7 @@ export type FilesSliceCreator = StateCreator<
   FilesSlice
 >;
 
-export const createFilesSlice: FilesSliceCreator = (set, get) => ({
+export const createFilesSlice: FilesSliceCreator = (set) => ({
   subjects: [],
   activeSubjectId: null,
 

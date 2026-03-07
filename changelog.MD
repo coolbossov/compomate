@@ -8,6 +8,47 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-07 — Claude (claude-sonnet-4-6) — Batch 5A
+
+#### Batch 5A — Backdrop library, templates, session management
+**Commit:** `feat: backdrop tabs (Ideogram v2 + Gemini Vision), templates, session resume`
+- `BackdropPanel.tsx`: Full rewrite — 3 tabs (Upload / AI Generate / Reference Photo)
+  - Upload tab: drag-and-drop zone, 2-col thumbnail grid with hover delete, active border `#6367FF`, R2 background upload via `uploadBlobToR2`
+  - AI Generate tab: Flux sub-section (prompt + style hint + aspect) + Ideogram v2 sub-section (prompt + style dropdown: Realistic / Design / Render 3D / Anime)
+  - Reference Photo tab: upload reference image → Gemini Vision → editable prompt → Generate with Flux
+  - Shared `runFalGeneration()` helper used by all three generation flows
+- `api/generate-backdrop/route.ts`: Added `model` param (`flux` | `ideogram`); `submitIdeogramJob()` submits to `fal-ai/ideogram/v2` with `style_type`, `aspect_ratio: 4:5`, `rendering_speed: BALANCED`; poll handler accepts `model` query param
+- `api/analyze-reference/route.ts` (new): Gemini 2.0 Flash Vision → backdrop prompt; rate-limited; returns `{ prompt: string }`
+- `api/templates/route.ts` (new): GET / POST templates; session_id managed as httpOnly cookie; stores in `compomate_templates` Supabase table
+- `api/templates/[id]/route.ts` (new): GET / DELETE single template; session scoped
+- `TemplatesPanel.tsx` (new): Save dialog (Cmd+S via `compomate:save-template` event); list with Load / JSON↓ / Delete; Import JSON; Download JSON
+- `src/lib/client/sessionStorage.ts` (new): `saveSession` / `loadSession` / `clearSession` localStorage helpers
+- `SessionResumeDialog.tsx` (new): Shows on startup if saved session < 24h; Resume loads jobName into store
+- `src/app/page.tsx`: Added `<SessionResumeDialog />` + `<TemplatesPanel />` in right panel
+- `src/lib/store/types.ts` + `backdropSlice.ts`: Added `updateBackdrop(id, patch)` action for R2 key patching
+- `supabase/migrations/20260307_create_compomate_templates.sql` (new): `compomate_templates` table + index + updated_at trigger
+- Build: ✓ 0 TypeScript errors, 11 routes
+
+---
+
+### Session: 2026-03-07 — Codex (GPT-5)
+
+#### Batch 4 stabilization gate
+- Fixed the new Konva canvas path so the branch returned to a clean `npm run lint` and `npm run build` baseline.
+- `src/components/workspace/KonvaCanvas.tsx` — moved the shared stage renderer out of the component body, replaced the image-loading hook with a safer loaded-image record, and kept drag/zoom/reflection props explicit.
+- `src/components/layout/ShortcutsOverlay.tsx` — replaced array-index keys with stable keys derived from shortcut metadata.
+- `src/lib/client/useKeyboardShortcuts.ts` — replaced the ternary undo/redo expression with explicit branching.
+- `src/components/panels/FilePanel.tsx`, `src/lib/client/utils.ts`, `src/lib/compositing/pipeline.ts`, `src/lib/store/slices/filesSlice.ts` — removed dead imports/unused parameters.
+- `src/lib/store/slices/uiSlice.ts` — clamped persisted canvas zoom in the setter instead of trusting callers.
+- Review gate after this chunk: `npm run lint` passed, `npm run build` passed, diff inspection stayed scoped to the stabilization files, stub/dead-code scan on touched files returned clean, and `npm audit --omit=dev` reported 0 vulnerabilities.
+- During the review pass, identified additional in-progress Batch 5 work already present in the repo for templates, session resume, analytics, and new API routes; next work will finish and wire those features rather than rebuild parallel implementations.
+
+#### Scope clarification + phase completion kickoff
+- User clarified that `portal-slideshow` is a separate project and should not be integrated into `compomate`.
+- User clarified that `compomate` is currently an internal tool, but should be built cleanly enough to support future reuse by other companies.
+- New directive for this pass: finish the remaining phases without knowingly temporary work, keep `changelog.MD` updated continuously, and apply strong review/verification after each major implementation chunk.
+- Began a fresh audit of the current branch state to determine which planned phases remain incomplete after the recent Batch 4 work.
+
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 4B react-konva + MediaPipe
 
 #### Batch 4B — react-konva canvas + MediaPipe pose estimation

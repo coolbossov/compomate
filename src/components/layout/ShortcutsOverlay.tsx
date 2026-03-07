@@ -45,16 +45,16 @@ export function ShortcutsOverlay() {
         </DialogHeader>
 
         <div className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-2.5 pt-1">
-          {SHORTCUTS.map((shortcut, i) => {
+          {SHORTCUTS.map((shortcut) => {
             const mods = shortcut.modifiers ?? [];
             const modBadges = mods.map((m) => MOD_LABELS[m] ?? m);
             const keyLabel = KEY_LABELS[shortcut.key] ?? shortcut.key;
             const allKeys = [...modBadges, keyLabel];
+            const shortcutKey = `${shortcut.key}-${shortcut.description}`;
 
             return (
               <div
-                // eslint-disable-next-line react/no-array-index-key
-                key={i}
+                key={shortcutKey}
                 className="contents"
               >
                 <span className="self-center text-xs text-[var(--text-soft)]">
@@ -63,8 +63,7 @@ export function ShortcutsOverlay() {
                 <div className="flex items-center gap-1 justify-end">
                   {allKeys.map((k, ki) => (
                     <kbd
-                      // eslint-disable-next-line react/no-array-index-key
-                      key={ki}
+                      key={`${shortcutKey}-${k}-${ki}`}
                       style={{
                         background: '#2A2A38',
                         border: '1px solid #3A3A4A',

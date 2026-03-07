@@ -34,7 +34,11 @@ export function useKeyboardShortcuts() {
       // Cmd/Ctrl+Z undo / Cmd/Ctrl+Shift+Z redo
       if (cmdOrCtrl && e.key === 'z') {
         e.preventDefault();
-        e.shiftKey ? redo() : undo();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
         return;
       }
 
