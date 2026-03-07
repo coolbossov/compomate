@@ -8,6 +8,21 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 4B react-konva + MediaPipe
+
+#### Batch 4B — react-konva canvas + MediaPipe pose estimation
+**Commit:** `feat: react-konva canvas — zoom/pan, Transformer, arrow nudge, MediaPipe pose estimation`
+- `src/lib/client/mediapipe.ts` — MediaPipe WASM 33-keypoint pose (GPU delegate, pixel centroid fallback)
+- `src/lib/client/autoPlacement.ts` — MediaPipe → centroid fallback auto-placement
+- `Canvas.tsx` split into Canvas.tsx (outer shell, ResizeObserver) + KonvaCanvas.tsx (Konva implementation)
+- KonvaCanvas: backdrop + subject (draggable + Transformer) + reflection layers
+- Cmd+scroll zoom (0.25x–4x), arrow key nudge (0.1%/1%), drag-to-reposition
+- Side-by-side toggle (raw subject on white vs full composite)
+- Danger zone crop zone overlays (4×6 red, 5×7 orange dashed Rects in logical coords)
+- Auto-placement wired to FilePanel subject selection via `computeAutoPlacement`
+
+---
+
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 4A Export Pipeline
 
 #### Batch 4A — Export pipeline upgrade
