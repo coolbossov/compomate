@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getSupabaseAdminClient,
-  isSupabaseConfigured,
 } from "@/lib/server/supabase-admin";
+import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
-import type { ProjectSnapshot } from "@/lib/shared/project-snapshot";
+import { isProjectSnapshot, type ProjectSnapshot } from "@/lib/shared/project-snapshot";
 
 export const runtime = "nodejs";
 
@@ -16,14 +16,6 @@ type SaveProjectBody = {
   snapshot?: ProjectSnapshot;
 };
 
-function assertSnapshot(value: unknown): value is ProjectSnapshot {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const candidate = value as { version?: unknown };
-  return candidate.version === 1;
-}
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
   const limit = checkRateLimit(`projects:list:${ip}`, 80, 60_000);
@@ -34,8 +26,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ projects: [], configured: false }, { status: 200 });
+  const persistence = getProjectPersistenceStatus();
+  if (!persistence.available) {
+    return NextResponse.json(
+      { projects: [], configured: false, available: false, reason: persistence.reason },
+      { status: 200 },
+    );
   }
 
   const client = getSupabaseAdminClient();
@@ -65,9 +61,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!isSupabaseConfigured()) {
+  const persistence = getProjectPersistenceStatus();
+  if (!persistence.available) {
     return NextResponse.json(
-      { error: "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." },
+      { error: persistence.reason ?? "Project persistence is unavailable." },
       { status: 503 },
     );
   }
@@ -82,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!name) {
     return NextResponse.json({ error: "Project name is required." }, { status: 400 });
   }
-  if (!assertSnapshot(body.snapshot)) {
+  if (!isProjectSnapshot(body.snapshot)) {
     return NextResponse.json({ error: "Invalid project snapshot payload." }, { status: 400 });
   }
 
