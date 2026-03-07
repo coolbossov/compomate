@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
-import { Pin } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
+import { Pin, Loader2 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import {
   useFirstName,
@@ -49,7 +49,9 @@ export function NameEntryPanel() {
   }, [activeSubjectId, clearForNextFile]);
 
   // Load font faces for preview
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   useEffect(() => {
+    setFontsLoaded(false);
     const pair = FONT_PAIRS.find((p) => p.id === fontPairId);
     if (!pair) return;
     const f1 = new FontFace('PreviewFirst', `url(/fonts/${pair.firstNameFont})`);
@@ -58,9 +60,11 @@ export function NameEntryPanel() {
       .then(([loaded1, loaded2]) => {
         document.fonts.add(loaded1);
         document.fonts.add(loaded2);
+        setFontsLoaded(true);
       })
       .catch(() => {
-        // Font files may not exist in dev — preview falls back to system fonts silently
+        // Font files may not exist in dev — preview falls back to system fonts
+        setFontsLoaded(true); // Show with fallback rather than loading forever
       });
   }, [fontPairId]);
 
@@ -117,20 +121,26 @@ export function NameEntryPanel() {
 
       {/* Font preview */}
       <div className="mt-1 rounded bg-[#0D0D12] p-2 text-center min-h-[48px] flex items-center justify-center">
-        <span style={{ fontFamily: 'PreviewFirst', fontSize: 20, color: '#fff' }}>
-          {firstName || 'First'}{' '}
-        </span>
-        <span
-          style={{
-            fontFamily: 'PreviewLast',
-            fontSize: 16,
-            color: '#C9BEFF',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-          }}
-        >
-          {lastName || 'LAST'}
-        </span>
+        {!fontsLoaded ? (
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--text-soft)]" />
+        ) : (
+          <>
+            <span style={{ fontFamily: 'PreviewFirst', fontSize: 20, color: '#fff' }}>
+              {firstName || 'First'}{' '}
+            </span>
+            <span
+              style={{
+                fontFamily: 'PreviewLast',
+                fontSize: 16,
+                color: '#C9BEFF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+              }}
+            >
+              {lastName || 'LAST'}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Font pair selector */}

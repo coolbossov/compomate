@@ -526,7 +526,14 @@ export function BackdropPanel() {
                         ? 'border-[#6367FF]'
                         : 'border-[color:var(--panel-border)] hover:border-[#6367FF]/50'
                     }`}
-                    onClick={() => setActiveBackdrop(backdrop.id)}
+                    onClick={() => {
+                      // Click active backdrop again to deselect it
+                      if (backdrop.id === activeBackdropId) {
+                        setActiveBackdrop(null);
+                      } else {
+                        setActiveBackdrop(backdrop.id);
+                      }
+                    }}
                   >
                     <img
                       className="aspect-[4/5] w-full object-cover"
