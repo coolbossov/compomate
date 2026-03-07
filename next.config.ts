@@ -26,8 +26,16 @@ const securityHeaders = [
   },
   {
     key: "Content-Security-Policy",
-    value:
-      `default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: https: ws:; worker-src 'self' blob:; frame-ancestors 'none';`,
+    value: [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval'" : ""} https://us.i.posthog.com`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' blob: data: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://us.i.posthog.com https://*.sentry.io https://*.fal.run https://*.fal.media https://generativelanguage.googleapis.com https://*.r2.cloudflarestorage.com wss:",
+      "worker-src 'self' blob: https://cdn.jsdelivr.net",
+      "frame-ancestors 'none'",
+    ].join("; "),
   },
 ];
 
@@ -37,15 +45,24 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "**.fal.media" },
       { protocol: "https", hostname: "**.fal.run" },
+      { protocol: "https", hostname: "fal.media" },
       { protocol: "https", hostname: "**.r2.cloudflarestorage.com" },
       { protocol: "https", hostname: "storage.googleapis.com" },
     ],
   },
+
+  // Sharp is a native module — must be listed here so Next.js doesn't bundle it
+  serverExternalPackages: ["sharp"],
+
   async headers() {
     return [
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        source: "/api/(.*)",
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
       },
     ];
   },

@@ -8,6 +8,21 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-07 — Claude (claude-sonnet-4-6) — Batch 5C
+
+#### Batch 5C — Supabase schema, security hardening, next.config.ts
+**Commit:** `feat: 4-table Supabase schema, security headers/CSP, remotePatterns, usage logging`
+- `supabase/migrations/20260307_compomate_full_schema.sql`: 4 tables (sessions, templates, backdrops, usage_logs), RLS policies (service_role_all), indexes on session_token + created_at, updated_at triggers; apply via `supabase db push`
+- `.env.example`: complete variable inventory with placeholders — added NEXT_PUBLIC_SUPABASE_URL, SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SENTRY_AUTH_TOKEN; all R2/AI/analytics keys now have `<placeholder>` values
+- `.env.local`: added `⚠️ NEVER commit this file` warning at top
+- `src/lib/server/env.ts`: R2 removed from REQUIRED_VARS (graceful degradation — `getR2Env()` now logs `console.warn` instead of silently returning null); Sentry/PostHog added as optional fields to `EnvConfig`; Supabase URL resolver checks both `SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL`
+- `next.config.ts`: added `serverExternalPackages: ['sharp']`; added `fal.media` to remotePatterns; upgraded CSP from broad `connect-src https:` to explicit domain list (PostHog, Sentry, fal, Gemini, R2); added `font-src 'self' data:`; added `cdn.jsdelivr.net` to worker-src; added `/api/(.*)` route with `X-Robots-Tag: noindex`; preserved existing Sentry wrapping and PostHog rewrites from Batch 5B
+- `src/app/api/export/route.ts`: `sessionToken?: string` added to ExportRequest; `startTime = Date.now()` captured at handler entry; fire-and-forget usage log to `compomate_usage_logs` via `getSupabaseAdminClient()` after pipeline completes — never blocks response
+- ⚠️  Key rotation required: `FAL_KEY` (real key in .env.local: `c4099f61-...`) and `GEMINI_API_KEY` (real key: `AIzaSy...`) were committed by Codex in an earlier batch. Rotate both keys immediately: fal.ai dashboard → API Keys; Google AI Studio → API Keys.
+- Build: ✓ 0 TypeScript errors, 12 routes
+
+---
+
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 5B
 
 #### Batch 5B — Analytics + UI polish
@@ -50,6 +65,22 @@
 ---
 
 ### Session: 2026-03-07 — Codex (GPT-5)
+
+#### Batch 5 browser/runtime hardening — real-browser crash fix + CSP/runtime cleanup
+- `src/lib/store/selectors.ts`, `src/lib/store/slices/exportSlice.ts`, `src/lib/store/types.ts`, and `src/components/panels/ExportPanel.tsx` — removed the unstable derived queue-summary subscription that was returning a fresh object every render and crashing the app on first load under React 19’s external-store checks.
+- `next.config.ts` — updated the CSP to match the runtime the app actually uses:
+  `connect-src` now allows `blob:` for local export-source fetches, `worker-src` allows `blob:`, and `script-src` includes `wasm-unsafe-eval` so MediaPipe can compile its local WebAssembly runtime without opening generic production `unsafe-eval`.
+- `src/lib/client/mediapipe.ts` plus vendored assets under `public/vendor/mediapipe/wasm/` — moved the MediaPipe runtime off the CDN path and into the repo so auto placement uses a local, version-matched WASM bundle instead of depending on external script hosting.
+- `eslint.config.mjs` — excluded `public/vendor/**` from lint so vendored upstream runtime code does not pollute repo lint results.
+- `src/app/layout.tsx` — gated Vercel Analytics and Speed Insights to actual Vercel runtime environments so local browser sessions stop emitting avoidable `_vercel/*` script errors.
+- Real-browser verification with Playwright against local production build:
+  confirmed the app loads cleanly, subject import works, MediaPipe graph initialization succeeds, backdrop import works, export completes successfully, and the first-export approval dialog appears. The remaining browser console error in the smoke path was the expected `503` from `/api/r2/presign` because R2 credentials are not configured in the local environment.
+- Review gate after this chunk: `npm run lint` passed, `npm run build` passed, focused diff inspection matched the browser/runtime files, stub/dead-code scan on touched files returned clean, and `npm audit --omit=dev` reported 0 vulnerabilities.
+
+#### Repository docs alignment
+- Rewrote `README.md` so it reflects the current product surface instead of the old phased-build framing.
+- Replaced `.env.example` with an environment template that includes the current R2, AI, Supabase, and observability variables actually used by the app.
+- Added a note at the top of `DEVELOPER_HANDOFF.md` marking it as historical and pointing future developers to `changelog.MD` and `README.md` for the current state.
 
 #### Batch 5 persistence hardening — export race fix + snapshot references
 - `src/app/api/export/route.ts` — removed the R2 upload race: exports now upload synchronously before returning a presigned download URL, and if R2 upload fails the route falls back to an inline data URL instead of returning a broken link.

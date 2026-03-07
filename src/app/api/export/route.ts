@@ -7,11 +7,13 @@ import {
   generateExportKey,
 } from "@/lib/server/r2";
 import { getR2Env } from "@/lib/server/env";
+import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 import {
   EXPORT_WIDTH_PX,
   EXPORT_HEIGHT_PX,
   buildExportFilename,
+  DB_TABLES,
 } from "@/lib/constants";
 import type { CompositionState, ExportProfileId, NameStyleId } from "@/lib/shared/composition";
 import type { FontPairId } from "@/types/composition";
@@ -44,6 +46,7 @@ interface ExportRequest {
   firstName: string;
   lastName: string;
   index: number;
+  sessionToken?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +87,7 @@ async function resolveImageBuffer(
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
   const ip = requestIp(request.headers);
   const limit = checkRateLimit(`export:${ip}`, 45, 60_000);
   if (!limit.allowed) {
@@ -123,6 +127,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       nameOverlay,
       fontBasePath: path.join(process.cwd(), "public", "fonts"),
     });
+
+    // ── Fire-and-forget usage log ────────────────────────────────────────────
+    void (async () => {
+      try {
+        const supabase = getSupabaseAdminClient();
+        if (supabase) {
+          await supabase.from(DB_TABLES.USAGE_LOGS).insert({
+            session_token: body.sessionToken ?? "anonymous",
+            event_type: "export",
+            model: "sharp",
+            duration_ms: Date.now() - startTime,
+            output_width: EXPORT_WIDTH_PX,
+            output_height: EXPORT_HEIGHT_PX,
+          });
+        }
+      } catch {
+        // non-critical — never block or fail the export
+      }
+    })();
 
     // ── File naming ──────────────────────────────────────────────────────────
     const filename = buildExportFilename(
