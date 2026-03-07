@@ -3,6 +3,7 @@ import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 import { FAL_FLUX_MODEL, FAL_IDEOGRAM_MODEL, FAL_BACKDROP_ASPECT } from "@/lib/constants";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type GenerateBackdropBody = {
   prompt?: string;

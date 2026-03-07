@@ -250,7 +250,6 @@ Current relevant env vars:
 
 ```bash
 FAL_KEY=
-FAL_MODEL=fal-ai/flux/schnell
 
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=

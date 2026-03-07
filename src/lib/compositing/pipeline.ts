@@ -79,15 +79,14 @@ async function applyLegFadeToBuffer(
  *  1.  normalizeSubject — RGBA sRGB PNG, validate dimensions
  *  2.  normalizeBackdrop — cover-fit to outputWidth×outputHeight
  *  3.  Size subject to subjectHeightPct of output canvas
- *  4.  analyzeSubjectPose — pixel-scan for placement metadata
- *  5.  calculatePlacement — convert xPct/yPct to pixel coordinates
- *  6.  Apply leg fade (if enabled) — modifies subject alpha
- *  7.  defringeSubject — 1px alpha erosion to remove colour fringe
- *  8.  applyLightWrap — blend backdrop edge colours onto subject outline
- *  9.  createReflection — 5-layer progressive blur, full-canvas buffer
- *  10. Composite onto backdrop: reflection → subject → fog
- *  11. renderNameOverlay (if enabled)
- *  12. toFormat('png') with 300 DPI metadata
+ *  4.  calculatePlacement — convert xPct/yPct to pixel coordinates
+ *  5.  Apply leg fade (if enabled) — modifies subject alpha
+ *  6.  defringeSubject — 1px alpha erosion to remove colour fringe
+ *  7.  applyLightWrap — blend backdrop edge colours onto subject outline
+ *  8.  createReflection — 5-layer progressive blur, full-canvas buffer
+ *  9.  Composite onto backdrop: reflection → subject → fog
+ *  10. renderNameOverlay (if enabled)
+ *  11. toFormat('png') with 300 DPI metadata
  */
 export async function runCompositorPipeline(
   input: CompositorInput,
@@ -143,12 +142,7 @@ export async function runCompositorPipeline(
     throw new Error('Unable to process subject image dimensions.');
   }
 
-  // ── 4. Pose analysis (metadata for future auto-placement) ────────────────
-  // analyzeSubjectPose is called for diagnostics; placement is driven by xPct/yPct
-  // (we don't use its output for placement in the default pipeline)
-  // const _poseMetrics = await analyzeSubjectPose(sizedSubjectPng);
-
-  // ── 5. Calculate placement ───────────────────────────────────────────────
+  // ── 4. Calculate placement ───────────────────────────────────────────────
   const placement = calculatePlacement(
     subjectWidth,
     subjectHeight,
@@ -157,15 +151,15 @@ export async function runCompositorPipeline(
     comp,
   );
 
-  // ── 6. Leg fade (modifies subject alpha before compositing) ──────────────
+  // ── 5. Leg fade (modifies subject alpha before compositing) ──────────────
   const legFadedPng = comp.legFadeEnabled
     ? await applyLegFadeToBuffer(sizedSubjectPng, comp.legFadeStartPct)
     : sizedSubjectPng;
 
-  // ── 7. Defringe ──────────────────────────────────────────────────────────
+  // ── 6. Defringe ──────────────────────────────────────────────────────────
   const defringedPng = await defringeSubject(legFadedPng, 1);
 
-  // ── 8. Light wrap ────────────────────────────────────────────────────────
+  // ── 7. Light wrap ────────────────────────────────────────────────────────
   const lightWrappedPng = await applyLightWrap(
     defringedPng,
     normalizedBackdrop,
@@ -174,12 +168,12 @@ export async function runCompositorPipeline(
     outputHeight,
   );
 
-  // ── 9. Reflection (full-canvas buffer) ──────────────────────────────────
+  // ── 8. Reflection (full-canvas buffer) ──────────────────────────────────
   const reflectionCanvas = comp.reflectionEnabled && comp.reflectionSizePct > 0
     ? await createReflection(lightWrappedPng, comp, outputWidth, outputHeight, placement)
     : null;
 
-  // ── 10. Build composite layer list ──────────────────────────────────────
+  // ── 9. Build composite layer list ───────────────────────────────────────
   const overlays: sharp.OverlayOptions[] = [];
 
   // a. Reflection first (renders below subject)
@@ -212,7 +206,7 @@ export async function runCompositorPipeline(
     .png()
     .toBuffer();
 
-  // ── 11. Name overlay ────────────────────────────────────────────────────
+  // ── 10. Name overlay ────────────────────────────────────────────────────
   if (nameOverlay?.enabled) {
     canvasBuffer = await renderNameOverlay(
       canvasBuffer,
@@ -223,7 +217,7 @@ export async function runCompositorPipeline(
     );
   }
 
-  // ── 12. Final encode at 300 DPI ─────────────────────────────────────────
+  // ── 11. Final encode at 300 DPI ─────────────────────────────────────────
   const finalBuffer = await sharp(canvasBuffer)
     .toColorspace('srgb')
     .withMetadata({ density: EXPORT_DPI })

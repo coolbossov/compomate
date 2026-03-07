@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
+import { waitUntil } from "@vercel/functions";
 import { runCompositorPipeline } from "@/lib/compositing/pipeline";
 import {
   getPresignedDownloadUrl,
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     // ── Fire-and-forget usage log ────────────────────────────────────────────
-    void (async () => {
+    waitUntil((async () => {
       try {
         const supabase = getSupabaseAdminClient();
         if (supabase) {
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } catch {
         // non-critical — never block or fail the export
       }
-    })();
+    })());
 
     // ── File naming ──────────────────────────────────────────────────────────
     const filename = buildExportFilename(

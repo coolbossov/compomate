@@ -7,6 +7,12 @@ import type { CompositionState, ExportProfileId, NameStyleId } from '@/lib/share
 import type { BatchItem } from '@/types/export';
 import type { FontPairId } from '@/types/composition';
 
+export interface ToastMessage {
+  id: number;
+  message: string;
+  durationMs: number;
+}
+
 // ---------------------------------------------------------------------------
 // Files slice
 // ---------------------------------------------------------------------------
@@ -109,8 +115,7 @@ export interface UISlice {
   showDangerZone: boolean;
   showSafeArea: boolean;
   canvasZoom: number;
-  toastMessage: string | null;
-  toastTimeout: ReturnType<typeof setTimeout> | null;
+  toastMessage: ToastMessage | null;
   setLeftTab: (tab: 'files' | 'backdrops') => void;
   setShowShortcuts: (v: boolean) => void;
   setShowSideBySide: (v: boolean) => void;

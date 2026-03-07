@@ -1,6 +1,7 @@
 'use client';
 
 import { useStore } from '@/lib/store';
+import { useShowShortcuts } from '@/lib/store/selectors';
 import { SHORTCUTS } from '@/types/shortcuts';
 import {
   Dialog,
@@ -24,7 +25,7 @@ const MOD_LABELS: Record<string, string> = {
 };
 
 export function ShortcutsOverlay() {
-  const showShortcuts = useStore((s) => s.showShortcuts);
+  const showShortcuts = useShowShortcuts();
   const setShowShortcuts = useStore((s) => s.setShowShortcuts);
 
   return (

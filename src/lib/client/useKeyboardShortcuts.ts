@@ -17,14 +17,14 @@ export function useKeyboardShortcuts() {
         tag === 'textarea' ||
         (e.target as HTMLElement)?.isContentEditable;
 
-      // ← → file navigation — not in inputs, no modifier
+      // [ ] file navigation — keep arrow keys dedicated to canvas nudging.
       if (!inInput && !cmdOrCtrl && !e.shiftKey) {
-        if (e.key === 'ArrowLeft') {
+        if (e.key === '[') {
           e.preventDefault();
           prevSubject();
           return;
         }
-        if (e.key === 'ArrowRight') {
+        if (e.key === ']') {
           e.preventDefault();
           nextSubject();
           return;

@@ -172,10 +172,10 @@ export function ExportPanel() {
   const addBatchItem = useStore((s) => s.addBatchItem);
   const updateBatchItem = useStore((s) => s.updateBatchItem);
   const clearBatch = useStore((s) => s.clearBatch);
+  const removeBatchItem = useStore((s) => s.removeBatchItem);
   const setApprovalGiven = useStore((s) => s.setApprovalGiven);
   const incrementExportCounter = useStore((s) => s.incrementExportCounter);
   const setLockSettings = useStore((s) => s.setLockSettings);
-  const showToast = useStore((s) => s.showToast);
 
   const [isExporting, setIsExporting] = useState(false);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
@@ -249,7 +249,6 @@ export function ExportPanel() {
       };
 
       incrementExportCounter();
-      showToast(filename);
       toast(filename, { duration: EXPORT_TOAST_DURATION_MS });
 
       // Trigger download
@@ -264,7 +263,6 @@ export function ExportPanel() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Export failed.';
-      showToast(message);
       toast.error(message);
     } finally {
       setIsExporting(false);
@@ -285,7 +283,6 @@ export function ExportPanel() {
     exportCounter,
     approvalGiven,
     incrementExportCounter,
-    showToast,
     setApprovalDialogOpen,
   ]);
 
@@ -588,6 +585,15 @@ export function ExportPanel() {
                   <p className="text-[10px] text-red-400 truncate">{item.error}</p>
                 )}
               </div>
+              <button
+                type="button"
+                className="asset-remove"
+                onClick={() => removeBatchItem(item.id)}
+                aria-label={`Remove ${item.label} from batch`}
+                title={`Remove ${item.label} from batch`}
+              >
+                Remove
+              </button>
             </div>
           ))}
         </div>

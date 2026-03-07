@@ -110,6 +110,7 @@ export function ControlPanel() {
 
   const updateComposition = useStore((s) => s.updateComposition);
   const applyBlendPreset = useStore((s) => s.applyBlendPreset);
+  const resetComposition = useStore((s) => s.resetComposition);
   const setNameSizePct = useStore((s) => s.setNameSizePct);
   const setNameYFromBottomPct = useStore((s) => s.setNameYFromBottomPct);
 
@@ -168,8 +169,26 @@ export function ControlPanel() {
     }
   }
 
+  function handleResetAllControls(): void {
+    resetComposition();
+    setNameSizePct(NAME_OVERLAY_DEFAULTS.sizePct);
+    setNameYFromBottomPct(NAME_OVERLAY_DEFAULTS.yFromBottomPct);
+  }
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="panel-title">Controls</h2>
+        <button
+          type="button"
+          className="btn-secondary h-8 px-2 text-xs"
+          onClick={handleResetAllControls}
+          title="Reset all visual controls to their defaults"
+        >
+          Reset All
+        </button>
+      </div>
+
       {/* Auto Assist */}
       <section className="space-y-3">
         <h2 className="panel-title">Auto Assist</h2>

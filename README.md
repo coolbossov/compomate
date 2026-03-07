@@ -74,7 +74,6 @@ R2_ENDPOINT=
 
 ```bash
 FAL_KEY=
-FAL_MODEL=fal-ai/flux/schnell
 GEMINI_API_KEY=
 ```
 

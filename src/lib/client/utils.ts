@@ -6,7 +6,7 @@
 import type { Asset } from '@/types/files';
 import type { BackdropAsset } from '@/types/backdrop';
 import type { ExportProfileId } from '@/lib/shared/composition';
-import { EXPORT_PROFILES } from '@/lib/shared/composition';
+import { clamp, EXPORT_PROFILES } from '@/lib/shared/composition';
 import {
   isProjectSnapshot as isSharedProjectSnapshot,
   type ProjectSnapshot,
@@ -311,8 +311,6 @@ export type PoseAnalysis = {
   leanPct: number;
   subjectAspect: number;
 };
-
-import { clamp } from '@/lib/shared/composition';
 
 export async function analyzeSubjectPose(objectUrl: string): Promise<PoseAnalysis> {
   const image = new Image();

@@ -31,6 +31,7 @@ export async function estimatePoseFromElement(
   const landmarker = await getLandmarker();
   if (!landmarker) return null;
   try {
+    // TODO: remove these casts when @mediapipe/tasks-vision exposes stable TS types.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = (landmarker as any).detect(img);
     if (!result.poses?.length) return null;

@@ -2,12 +2,11 @@
 
 import dynamic from 'next/dynamic';
 import { AppHeader } from '@/components/layout/AppHeader';
+import { LeftSidebar } from '@/components/layout/LeftSidebar';
 import { ShortcutsOverlay } from '@/components/layout/ShortcutsOverlay';
 import { KeyboardShortcutsProvider } from '@/components/layout/KeyboardShortcutsProvider';
 import { SessionResumeDialog } from '@/components/layout/SessionResumeDialog';
-import { FilePanel } from '@/components/panels/FilePanel';
-import { BackdropPanel } from '@/components/panels/BackdropPanel';
-import { NameEntryPanel } from '@/components/panels/NameEntryPanel';
+import { ToastBridge } from '@/components/layout/ToastBridge';
 import { ControlPanel } from '@/components/panels/ControlPanel';
 import { ExportPanel } from '@/components/panels/ExportPanel';
 import { TemplatesPanel } from '@/components/panels/TemplatesPanel';
@@ -21,14 +20,11 @@ export default function Home() {
         <AppHeader />
         <ShortcutsOverlay />
         <SessionResumeDialog />
+        <ToastBridge />
 
         <main className="grid h-[calc(100vh-56px)] min-h-[780px] grid-cols-[320px_minmax(0,1fr)_360px] gap-4 p-4">
-          {/* Left panel — files, backdrops, name */}
-          <aside className="panel overflow-auto space-y-4">
-            <FilePanel />
-            <BackdropPanel />
-            <NameEntryPanel />
-          </aside>
+          {/* Left panel — subjects, backdrops, name */}
+          <LeftSidebar />
 
           {/* Centre — canvas */}
           <section className="panel flex min-h-0 flex-col gap-3">

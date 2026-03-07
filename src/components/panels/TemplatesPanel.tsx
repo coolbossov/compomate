@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 import { useStore } from '@/lib/store';
 import { useComposition, useExportProfile, useNameStyle, useFontPair } from '@/lib/store/selectors';
 import { parseErrorText } from '@/lib/client/utils';
@@ -22,6 +22,39 @@ interface ApiTemplate {
   created_at: string;
   updated_at: string;
 }
+
+const compositionSchema = z.object({
+  xPct: z.number(),
+  yPct: z.number(),
+  subjectHeightPct: z.number(),
+  reflectionEnabled: z.boolean(),
+  reflectionSizePct: z.number(),
+  reflectionPositionPct: z.number(),
+  reflectionOpacityPct: z.number(),
+  reflectionBlurPx: z.number(),
+  legFadeEnabled: z.boolean(),
+  legFadeStartPct: z.number(),
+  fogEnabled: z.boolean(),
+  fogOpacityPct: z.number(),
+  fogHeightPct: z.number(),
+  shadowEnabled: z.boolean(),
+  shadowStrengthPct: z.number(),
+  lightDirectionDeg: z.number(),
+  lightElevationDeg: z.number(),
+  shadowStretchPct: z.number(),
+  shadowBlurPx: z.number(),
+});
+
+const importedTemplateSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  composition: compositionSchema,
+  exportProfileId: z.enum(['original', '8x10', '5x7', '4x5', '1x1']).optional(),
+  nameStyleId: z.enum(['classic', 'outline', 'modern']).optional(),
+  fontPairId: z.enum(['classic', 'modern']).optional(),
+  exportedAt: z.string().optional(),
+});
+
+type ImportedTemplate = z.infer<typeof importedTemplateSchema>;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -170,28 +203,49 @@ export function TemplatesPanel() {
   // Import template from JSON file
   // -------------------------------------------------------------------------
 
-  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): void {
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const rawText = await file.text();
+      let parsedJson: unknown;
+
       try {
-        const parsed = JSON.parse(reader.result as string) as any;
-        if (!parsed.composition || typeof parsed.composition !== 'object') {
-          throw new Error('Invalid template file — missing composition.');
-        }
-        updateComposition(parsed.composition as Partial<CompositionState>);
-        if (parsed.exportProfileId) setExportProfile(parsed.exportProfileId as ExportProfileId);
-        if (parsed.nameStyleId) setNameStyle(parsed.nameStyleId as NameStyleId);
-        if (parsed.fontPairId) setFontPair(parsed.fontPairId as FontPairId);
-        showToast(`Template "${parsed.name ?? 'Imported'}" loaded from file.`);
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : 'Failed to parse template file.');
+        parsedJson = JSON.parse(rawText);
+      } catch {
+        throw new Error('Template import failed — file is not valid JSON.');
       }
-      // Reset input so the same file can be re-imported
-      if (importInputRef.current) importInputRef.current.value = '';
-    };
-    reader.readAsText(file);
+
+      const parsed = importedTemplateSchema.safeParse(parsedJson);
+      if (!parsed.success) {
+        throw new Error(parsed.error.issues[0]?.message ?? 'Template import failed — invalid shape.');
+      }
+
+      applyImportedTemplate(parsed.data);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to parse template file.');
+    } finally {
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
+    }
+  }
+
+  function applyImportedTemplate(template: ImportedTemplate): void {
+    updateComposition(template.composition);
+    if (template.exportProfileId) {
+      setExportProfile(template.exportProfileId);
+    }
+    if (template.nameStyleId) {
+      setNameStyle(template.nameStyleId);
+    }
+    if (template.fontPairId) {
+      setFontPair(template.fontPairId);
+    }
+    showToast(`Template "${template.name ?? 'Imported'}" loaded from file.`);
   }
 
   // -------------------------------------------------------------------------
@@ -229,7 +283,7 @@ export function TemplatesPanel() {
           type="file"
           accept="application/json,.json"
           className="hidden"
-          onChange={handleImportFile}
+          onChange={(e) => { void handleImportFile(e); }}
         />
       </div>
 

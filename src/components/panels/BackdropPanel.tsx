@@ -66,6 +66,7 @@ export function BackdropPanel() {
   const updateBackdrop = useStore((s) => s.updateBackdrop);
   const setActiveBackdrop = useStore((s) => s.setActiveBackdrop);
   const setGeneration = useStore((s) => s.setGeneration);
+  const resetGeneration = useStore((s) => s.resetGeneration);
   const showToast = useStore((s) => s.showToast);
 
   const objectUrlsRef = useRef(new Set<string>());
@@ -215,6 +216,7 @@ export function BackdropPanel() {
     if (!prompt) { showToast('Enter a prompt before generating.'); return; }
 
     setGenerating(true);
+    resetGeneration();
     setGeneration({ status: 'generating', prompt });
     showToast('Generating backdrop…');
 

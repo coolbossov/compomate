@@ -9,7 +9,7 @@ export type UISliceCreator = StateCreator<
   UISlice
 >;
 
-export const createUISlice: UISliceCreator = (set, get) => ({
+export const createUISlice: UISliceCreator = (set) => ({
   leftTab: 'files',
   showShortcuts: false,
   showSideBySide: false,
@@ -17,7 +17,6 @@ export const createUISlice: UISliceCreator = (set, get) => ({
   showSafeArea: true,
   canvasZoom: 1,
   toastMessage: null,
-  toastTimeout: null,
 
   setLeftTab: (tab: 'files' | 'backdrops') =>
     set((draft) => {
@@ -50,29 +49,18 @@ export const createUISlice: UISliceCreator = (set, get) => ({
     }),
 
   showToast: (message: string, durationMs = EXPORT_TOAST_DURATION_MS) => {
-    // Clear any existing timer imperatively before mutating state
-    const existing = get().toastTimeout;
-    if (existing !== null) clearTimeout(existing);
-
-    const timeout = setTimeout(() => {
-      set((draft) => {
-        draft.toastMessage = null;
-        draft.toastTimeout = null;
-      });
-    }, durationMs);
-
     set((draft) => {
-      draft.toastMessage = message;
-      draft.toastTimeout = timeout;
+      draft.toastMessage = {
+        id: Date.now(),
+        message,
+        durationMs,
+      };
     });
   },
 
   clearToast: () => {
-    const existing = get().toastTimeout;
-    if (existing !== null) clearTimeout(existing);
     set((draft) => {
       draft.toastMessage = null;
-      draft.toastTimeout = null;
     });
   },
 });

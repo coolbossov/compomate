@@ -111,7 +111,7 @@ export const useShowSafeArea = () => useStore((s) => s.showSafeArea);
 /** Current canvas zoom level (1.0 = 100%). */
 export const useCanvasZoom = () => useStore((s) => s.canvasZoom);
 
-/** Active toast message, or null when no toast is shown. */
+/** Pending toast event, or null when no toast should be shown. */
 export const useToastMessage = () => useStore((s) => s.toastMessage);
 
 // ---------------------------------------------------------------------------

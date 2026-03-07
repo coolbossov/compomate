@@ -22,13 +22,22 @@ export function FilePanel() {
 
   // Auto-placement — run whenever the active subject changes
   useEffect(() => {
-    if (!activeSubjectId) return;
     const subject = subjects.find((s) => s.id === activeSubjectId);
-    if (subject) {
-      void computeAutoPlacement(subject).then((patch) => updateComposition(patch));
+    if (!activeSubjectId || !subject) {
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSubjectId]);
+
+    let cancelled = false;
+    void computeAutoPlacement(subject).then((patch) => {
+      if (!cancelled) {
+        updateComposition(patch);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubjectId, subjects, updateComposition]);
 
   function registerUrls(urls: string[]) {
     for (const url of urls) objectUrlsRef.current.add(url);

@@ -127,6 +127,138 @@
 
 ### Session: 2026-03-07 — Codex (GPT-5)
 
+#### Commit + deploy handoff preparation
+- Final implementation pass is complete and verified in the working tree.
+- Ready to commit the audited-fix set on `main` and push it so the linked Vercel project can build from the committed state.
+- Latest verification state before commit:
+  - `npm run lint` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - `npm audit --omit=dev` passed
+  - browser smoke confirmed left-rail tabs, visible template-import validation toast, bracket file navigation, and canvas-only arrow-key nudging
+
+#### Final cleanup complete — route/runtime and low-risk code hygiene
+- `src/app/api/generate-backdrop/route.ts` now exports `maxDuration = 60` so the inline poll path has a safe serverless time budget.
+- `src/app/api/export/route.ts` now uses `waitUntil()` from `@vercel/functions` for usage-log writes instead of an untracked fire-and-forget async IIFE.
+- `src/lib/client/mediapipe.ts` now documents the current `as any` casts with a direct TODO pointing at upstream MediaPipe typings.
+- `src/lib/compositing/pipeline.ts` no longer carries the stale commented pose-analysis block and the step numbering/comments now match the actual pipeline.
+- `.env.example`, `README.md`, and `DEVELOPER_HANDOFF.md` no longer list the vestigial `FAL_MODEL` variable.
+- `src/lib/client/utils.ts` no longer has a mid-file import; `clamp` is imported with the rest of the module header.
+- Final verification for the full pass:
+  - `npm run lint` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - `npm audit --omit=dev` passed (`0` vulnerabilities)
+  - repo scan confirmed the `FAL_MODEL` placeholder is gone from current runtime docs/config
+  - local production export smoke still succeeds after the route changes (`Job-Alexandria-Rivera-0001.png`, inline PNG fallback path working as expected without R2)
+
+#### Phase 4 complete — UI/state cleanup + toast bridge
+- Added `src/components/layout/LeftSidebar.tsx` and converted the left rail to real `Subjects` / `Backdrops` tabs using the existing `leftTab` store state instead of the prior stacked layout.
+- Added `src/components/layout/ToastBridge.tsx` and rewired the store-backed toast path so `showToast()` now reaches the visible Sonner UI instead of silently updating dead state.
+- Simplified UI toast state in `src/lib/store/types.ts` and `src/lib/store/slices/uiSlice.ts`:
+  - removed the old timeout bookkeeping
+  - now emits discrete toast events with `{ id, message, durationMs }`
+  - `clearToast()` is used by the new bridge after dispatching to Sonner
+- `src/components/layout/AppHeader.tsx` now surfaces undo/redo affordances with disabled states and counts via the existing temporal selectors.
+- `src/components/panels/ControlPanel.tsx` now has a top-level `Reset All` control that resets visual composition controls, including name overlay size/position defaults.
+- `src/components/panels/ExportPanel.tsx` now wires `removeBatchItem()` into the batch list so queued items can be removed individually.
+- `src/components/panels/BackdropPanel.tsx` now calls `resetGeneration()` before starting a new AI backdrop request so stale queue/error state is cleared between runs.
+- `src/components/layout/ShortcutsOverlay.tsx` now consumes the shared `useShowShortcuts()` selector rather than reading raw store state directly.
+- Review gate after this chunk:
+  - `npx eslint` on all touched layout/store/panel files passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - dead selector/action scan confirmed the previously orphaned selector/action set is now wired into live UI
+  - real-browser smoke on the local production build confirmed:
+    - the left rail shows real `Subjects` / `Backdrops` tabs
+    - invalid template JSON now surfaces a visible toast with the validation error
+
+#### Phase 3 complete — interaction safety + template validation
+- `src/lib/client/useKeyboardShortcuts.ts` now uses `[` / `]` for file navigation so the arrow keys are reserved for direct canvas nudging.
+- `src/types/shortcuts.ts` was updated to match the new keyboard behavior and now documents both 1px and Shift+10px nudges.
+- `src/components/panels/FilePanel.tsx` no longer suppresses the exhaustive-deps warning for auto-placement; the effect now tracks its real dependencies and guards against stale async resolution with cancellation.
+- `src/components/panels/TemplatesPanel.tsx` now validates imported template JSON with `zod` instead of unchecked `JSON.parse(... as any)`, and malformed files fail with a clear import error.
+- Review gate after this chunk:
+  - `npx eslint src/lib/client/useKeyboardShortcuts.ts src/types/shortcuts.ts src/components/panels/FilePanel.tsx src/components/panels/TemplatesPanel.tsx` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - follow-up browser verification with seeded subject/backdrop assets confirmed:
+    - `]` changes the active subject file
+    - `Shift+ArrowRight` updates persisted `composition.xPct` from `50` to `51`, so arrow keys are staying on canvas nudge instead of also triggering file navigation
+
+#### Phase 2 complete — shared name overlay sizing + real font metrics
+- Reworked `src/lib/shared/name-overlay.ts` so the shared SVG builder now honors:
+  - `sizePct`
+  - `yFromBottomPct`
+  - selected font pair families
+  - measured text widths for centered first/last-name layout
+- Added font-metric parsing with `opentype.js` and a minimal local type declaration in `src/types/opentype-js.d.ts`.
+- The name overlay layout no longer uses a fixed gap around center for all fonts; it now centers the full visual name block using measured glyph bounds from the actual bundled TTFs when available, with a bounded fallback estimate when font data is unavailable.
+- `src/lib/compositing/text.ts` now measures the selected TTF files from disk and passes those metrics into the shared SVG builder before rasterizing via `@resvg/resvg-js`.
+- `src/components/workspace/KonvaCanvas.tsx` now loads the same font assets for preview, embeds the real font files in the SVG data URL, and passes matching text metrics into the preview overlay so preview/export spacing stays aligned.
+- Review gate after this chunk:
+  - `npx eslint src/lib/shared/name-overlay.ts src/lib/compositing/text.ts src/components/workspace/KonvaCanvas.tsx src/types/opentype-js.d.ts` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - local production export smoke re-rendered `output/playwright/export-name-classic.png` and `output/playwright/export-name-modern.png`
+  - manual image review confirmed the classic and modern font pairs render distinctly and the first/last-name block no longer overlaps
+
+#### Phase 1 complete — canvas preview fidelity + view controls
+- Rebuilt `src/components/workspace/KonvaCanvas.tsx` so the live preview now renders:
+  - name overlay SVG above the composite
+  - shadow layer with gradient ellipse + blur
+  - reflection layer honoring size, position, opacity, and blur controls
+  - leg fade in the preview subject rendering
+  - fog blend overlay on the floor
+- Added intuitive global view controls in `src/components/layout/AppHeader.tsx`:
+  - `Compare` toggles side-by-side raw subject vs composite preview
+  - `Crop Guides` toggles the existing 4x6 / 5x7 overlay state
+- Browser smoke on a local production build confirmed:
+  - single-view composite shows shadow, fog, leg fade, crop guides, and name overlay together
+  - compare mode now fits and centers both panes correctly after a follow-up fix to stage scaling math
+- Review gate after this chunk:
+  - `npm run lint -- src/components/workspace/KonvaCanvas.tsx src/components/layout/AppHeader.tsx` passed
+  - `npx tsc --noEmit` passed
+  - `npm run build` passed
+  - focused diff review and dead-code scan on touched files were clean
+- Browser console noise during smoke remains environment-related, not caused by this chunk:
+  - local `_vercel/insights` / `_vercel/speed-insights` 404s in `next start`
+  - expected `/api/r2/presign` 503s with local R2 env unset
+  - existing CSP block against the remote MediaPipe model URL
+
+#### UX defaults chosen for audit-fix implementation
+- User delegated the open behavior choices to the most intuitive defaults for operators.
+- Chosen defaults for the implementation pass:
+  - file navigation will move to `[` and `]`, leaving arrow keys dedicated to direct subject nudging on canvas
+  - the left rail will become real `Subjects` / `Backdrops` tabs instead of keeping the current stacked layout with dead `leftTab` state
+  - `Reset All` behavior will reset composition controls only, not names/export style/session metadata
+
+#### Functional audit review + implementation planning
+- Read the current audit findings and re-read `changelog.MD` to ground the next pass in the actual merged repo state rather than the earlier batch notes.
+- Re-verified the highest-risk findings directly in code:
+  - `src/components/workspace/KonvaCanvas.tsx` still lacks preview rendering for name overlay, shadow, fog, leg fade, and full reflection controls.
+  - `src/lib/shared/name-overlay.ts` still hardcodes font size, vertical position, and system font families.
+  - `src/lib/compositing/text.ts` still ignores `fontBasePath`, `fontPairId`, `sizePct`, and `yFromBottomPct`.
+  - `src/lib/client/useKeyboardShortcuts.ts` still conflicts with the Konva arrow-key nudge handler.
+  - `src/components/panels/FilePanel.tsx` still suppresses the stale-effect dependency warning.
+  - `src/components/panels/TemplatesPanel.tsx` still imports JSON with unchecked `JSON.parse(... as any)`.
+- Confirmed store/UI cleanup scope before planning:
+  - `showSideBySide` and `showDangerZone` are implemented in the canvas but have no UI controls.
+  - `leftTab` is currently orphaned and not consumed anywhere.
+  - undo/redo selectors are present but not surfaced in the header.
+- Built a dependency-ordered implementation plan for all 18 findings, grouped into: canvas fidelity, export fidelity, interaction/input safety, store/route cleanup, and low-risk code hygiene.
+
+#### Full repo change inventory loaded
+- Loaded the entire implemented repo delta from baseline snapshot commit `4de04a0` through current `HEAD` on `main`, rather than only inspecting local worktree changes.
+- Verified current branch state:
+  - branch: `main`
+  - worktree: clean
+  - latest local/remote commit: `50d1c49` (`fix: always render Analytics + SpeedInsights (remove conditional guard)`)
+- Repo-wide delta from `4de04a0..HEAD`: 99 files changed, 20,333 insertions, 4,241 deletions.
+- Confirmed the implementation history is already merged into `main` via merge commit `9f77994` from `feature/compomate-full-implementation`, followed by the analytics/speed-insights fix on top.
+- High-level loaded areas:
+  infrastructure and dependency expansion, typed domain models, Zustand/zundo store, compositing pipeline, R2 upload/download services, Konva canvas, MediaPipe pose estimation, AI backdrop generation, templates/session resume, analytics/observability, Supabase schema work, and the current browser/runtime hardening layer.
+
 #### Batch 5 browser/runtime hardening — real-browser crash fix + CSP/runtime cleanup
 - `src/lib/store/selectors.ts`, `src/lib/store/slices/exportSlice.ts`, `src/lib/store/types.ts`, and `src/components/panels/ExportPanel.tsx` — removed the unstable derived queue-summary subscription that was returning a fresh object every render and crashing the app on first load under React 19’s external-store checks.
 - `next.config.ts` — updated the CSP to match the runtime the app actually uses:

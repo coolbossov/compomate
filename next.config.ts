@@ -51,8 +51,9 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Sharp is a native module — must be listed here so Next.js doesn't bundle it
-  serverExternalPackages: ["sharp"],
+  // Native server packages must stay external so Next.js doesn't try to
+  // bundle their platform-specific bindings into route chunks.
+  serverExternalPackages: ["sharp", "@resvg/resvg-js"],
 
   async headers() {
     return [
