@@ -360,7 +360,10 @@ export function TemplatesPanel() {
                 <button
                   className="btn-secondary text-xs py-0.5 px-2 text-red-400 hover:text-red-300"
                   type="button"
-                  onClick={() => { void deleteTemplate(t.id, t.name); }}
+                  onClick={() => {
+                    if (!window.confirm(`Delete template "${t.name}"? This cannot be undone.`)) return;
+                    void deleteTemplate(t.id, t.name);
+                  }}
                   title={`Delete "${t.name}"`}
                 >
                   ✕

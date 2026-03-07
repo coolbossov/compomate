@@ -6,6 +6,7 @@ import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
+export const maxDuration = 10;
 
 const TABLE = "compomate_projects";
 
@@ -52,7 +53,9 @@ export async function GET(
 
   if (error) {
     const status = error.code === "PGRST116" ? 404 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    const message = status === 404 ? "Project not found." : "Failed to load project.";
+    console.error("[projects] Database error:", error.message);
+    return NextResponse.json({ error: message }, { status });
   }
 
   return NextResponse.json({ project: data });

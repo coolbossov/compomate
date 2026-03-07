@@ -38,13 +38,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY is not configured." }, { status: 500 });
+    return NextResponse.json({ error: "AI analysis service is not configured." }, { status: 503 });
   }
 
   try {
     const body = (await request.json()) as { imageDataUrl?: string };
     if (!body.imageDataUrl) {
       return NextResponse.json({ error: "imageDataUrl is required." }, { status: 400 });
+    }
+
+    // Check size first (before parsing)
+    if (body.imageDataUrl.length > 10_000_000) {
+      return NextResponse.json({ error: "Image too large for analysis." }, { status: 413 });
+    }
+
+    // Validate MIME type
+    const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    const mimeMatch = body.imageDataUrl.match(/^data:([^;]+);base64,/);
+    if (!mimeMatch || !ALLOWED_MIME_TYPES.includes(mimeMatch[1])) {
+      return NextResponse.json(
+        { error: "Unsupported image format. Use JPEG, PNG, or WebP." },
+        { status: 400 },
+      );
     }
 
     const { base64, mimeType } = extractBase64(body.imageDataUrl);

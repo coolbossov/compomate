@@ -24,6 +24,7 @@ export interface ExportQueueSummary {
   running: number;
   pending: number;
   failed: number;
+  cancelled: number;
   total: number;
 }
 

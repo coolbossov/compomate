@@ -54,6 +54,8 @@ const temporalPartialize = (state: AppState): UndoableState => ({
   fontPairId: state.fontPairId,
   firstName: state.firstName,
   lastName: state.lastName,
+  nameSizePct: state.nameSizePct,
+  nameYFromBottomPct: state.nameYFromBottomPct,
 });
 
 // ---------------------------------------------------------------------------
@@ -70,6 +72,10 @@ const persistPartialize = (state: AppState) => ({
   stickyLastName: state.stickyLastName,
   nameOverlayEnabled: state.nameOverlayEnabled,
   composition: state.composition,
+  nameSizePct: state.nameSizePct,
+  nameYFromBottomPct: state.nameYFromBottomPct,
+  leftTab: state.leftTab,
+  showSafeArea: state.showSafeArea ?? true,
 });
 
 // ---------------------------------------------------------------------------
@@ -93,8 +99,14 @@ export const useStore = create<AppState>()(
     {
       name: SESSION_STORAGE_KEY,
       storage: createJSONStorage(() => {
-        // Guard against SSR — localStorage is not available on the server
-        if (typeof window === 'undefined') return sessionStorage;
+        if (typeof window === 'undefined') {
+          // No-op storage for SSR — store is not persisted server-side
+          return {
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+          };
+        }
         return localStorage;
       }),
       partialize: persistPartialize,

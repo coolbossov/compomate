@@ -250,7 +250,7 @@ async function pollFalJob(
 
 function getFalKey(): string {
   const falKey = process.env.FAL_KEY;
-  if (!falKey) throw new Error("FAL_KEY is missing. Add it to .env.local.");
+  if (!falKey) throw new Error("AI image generation service is not configured.");
   return falKey;
 }
 

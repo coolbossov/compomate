@@ -55,15 +55,21 @@ export const createFilesSlice: FilesSliceCreator = (set) => ({
     set((draft) => {
       if (draft.subjects.length === 0) return;
       const idx = draft.subjects.findIndex((s: Asset) => s.id === draft.activeSubjectId);
-      const nextIdx = (idx + 1) % draft.subjects.length;
-      draft.activeSubjectId = draft.subjects[nextIdx].id;
+      if (idx === -1) {
+        draft.activeSubjectId = draft.subjects[0].id;
+        return;
+      }
+      draft.activeSubjectId = draft.subjects[(idx + 1) % draft.subjects.length].id;
     }),
 
   prevSubject: () =>
     set((draft) => {
       if (draft.subjects.length === 0) return;
       const idx = draft.subjects.findIndex((s: Asset) => s.id === draft.activeSubjectId);
-      const prevIdx = (idx - 1 + draft.subjects.length) % draft.subjects.length;
-      draft.activeSubjectId = draft.subjects[prevIdx].id;
+      if (idx === -1) {
+        draft.activeSubjectId = draft.subjects[draft.subjects.length - 1].id;
+        return;
+      }
+      draft.activeSubjectId = draft.subjects[(idx - 1 + draft.subjects.length) % draft.subjects.length].id;
     }),
 });

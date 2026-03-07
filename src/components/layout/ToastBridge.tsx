@@ -14,10 +14,14 @@ export function ToastBridge() {
       return;
     }
 
-    toast(toastMessage.message, {
-      id: toastMessage.id,
-      duration: toastMessage.durationMs,
-    });
+    const toastOptions = { id: toastMessage.id, duration: toastMessage.durationMs };
+    if (toastMessage.type === 'error') {
+      toast.error(toastMessage.message, toastOptions);
+    } else if (toastMessage.type === 'success') {
+      toast.success(toastMessage.message, toastOptions);
+    } else {
+      toast(toastMessage.message, toastOptions);
+    }
     clearToast();
   }, [clearToast, toastMessage]);
 

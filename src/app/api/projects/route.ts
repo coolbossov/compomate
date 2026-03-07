@@ -7,6 +7,7 @@ import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 import { isProjectSnapshot, type ProjectSnapshot } from "@/lib/shared/project-snapshot";
 
 export const runtime = "nodejs";
+export const maxDuration = 10;
 
 const TABLE = "compomate_projects";
 const MAX_PAYLOAD_BYTES = 1_250_000;
@@ -46,7 +47,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .limit(25);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[projects] Database error:", error.message);
+    return NextResponse.json({ error: "Failed to load projects." }, { status: 500 });
   }
   return NextResponse.json({ projects: data ?? [] });
 }
@@ -74,7 +76,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Supabase client unavailable." }, { status: 503 });
   }
 
-  const body = (await request.json()) as SaveProjectBody;
+  let body: SaveProjectBody;
+  try {
+    body = (await request.json()) as SaveProjectBody;
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
   const name = (body.name ?? "").trim();
   if (!name) {
     return NextResponse.json({ error: "Project name is required." }, { status: 400 });
@@ -101,7 +108,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[projects] Database error:", error.message);
+    return NextResponse.json({ error: "Failed to save project." }, { status: 500 });
   }
 
   return NextResponse.json({ project: data }, { status: 201 });

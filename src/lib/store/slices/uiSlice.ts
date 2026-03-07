@@ -2,6 +2,8 @@ import type { StateCreator } from 'zustand';
 import type { AppState, UISlice } from '../types';
 import { CANVAS_MIN_ZOOM, CANVAS_MAX_ZOOM, EXPORT_TOAST_DURATION_MS } from '@/lib/constants';
 
+let _toastSeq = 0;
+
 export type UISliceCreator = StateCreator<
   AppState,
   [['zustand/immer', never]],
@@ -48,12 +50,13 @@ export const createUISlice: UISliceCreator = (set) => ({
       draft.canvasZoom = Math.max(CANVAS_MIN_ZOOM, Math.min(CANVAS_MAX_ZOOM, zoom));
     }),
 
-  showToast: (message: string, durationMs = EXPORT_TOAST_DURATION_MS) => {
+  showToast: (message: string, durationMs = EXPORT_TOAST_DURATION_MS, type?: 'error' | 'success' | 'info') => {
     set((draft) => {
       draft.toastMessage = {
-        id: Date.now(),
+        id: ++_toastSeq,
         message,
         durationMs,
+        type,
       };
     });
   },

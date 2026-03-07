@@ -187,17 +187,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // No R2 — return inline base64 data URL
-    const base64 = result.buffer.toString("base64");
-    const downloadUrl = `data:image/png;base64,${base64}`;
-
-    return NextResponse.json({
-      filename,
-      downloadUrl,
-      width: EXPORT_WIDTH_PX,
-      height: EXPORT_HEIGHT_PX,
-    });
+    // No R2 — inline base64 would exceed Vercel's 4.5MB response limit for 4K exports
+    console.error('[export] R2 unavailable and inline fallback would exceed response size limit. R2 is required for 4000×5000 exports.');
+    return NextResponse.json(
+      { error: 'Export storage unavailable. Please ensure R2 is configured or retry.', retryable: true },
+      { status: 503 },
+    );
   } catch (error) {
+    if ((error as { isTimeout?: boolean }).isTimeout) {
+      return NextResponse.json(
+        { error: "Export took too long. Try with a simpler composition or retry.", retryable: true },
+        { status: 503 },
+      );
+    }
     const message = error instanceof Error ? error.message : "Unexpected export error.";
     const status =
       message.includes("Missing") || message.includes("Invalid data URL") ? 400

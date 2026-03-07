@@ -394,6 +394,7 @@ function CompositeStage({
       onWheel={handleWheel}
     >
       <Layer>
+        {/* 1. Backdrop */}
         {backdropImg && (
           <KonvaImage
             image={backdropImg}
@@ -404,6 +405,21 @@ function CompositeStage({
           />
         )}
 
+        {/* 2. Reflection (glass floor — must render BEFORE shadow so shadow sits on top) */}
+        {reflectionImg && reflectionEnabled && reflectionHeight > 0 && (
+          <KonvaImage
+            ref={reflectionNodeRef}
+            image={reflectionImg}
+            x={subjectX}
+            y={reflectionTop}
+            width={subjectW}
+            height={reflectionHeight}
+            opacity={reflectionOpacity}
+            listening={false}
+          />
+        )}
+
+        {/* 3. Shadow ellipse (sits ON TOP of the reflection/floor) */}
         {shadowEnabled && shadowW > 0 && shadowH > 0 && (
           <Ellipse
             ref={shadowNodeRef}
@@ -429,19 +445,7 @@ function CompositeStage({
           />
         )}
 
-        {reflectionImg && reflectionEnabled && reflectionHeight > 0 && (
-          <KonvaImage
-            ref={reflectionNodeRef}
-            image={reflectionImg}
-            x={subjectX}
-            y={reflectionTop}
-            width={subjectW}
-            height={reflectionHeight}
-            opacity={reflectionOpacity}
-            listening={false}
-          />
-        )}
-
+        {/* 4. Subject image */}
         {subjectImg && (
           <KonvaImage
             ref={subjectNodeRef}
@@ -455,14 +459,7 @@ function CompositeStage({
           />
         )}
 
-        {subjectImg && (
-          <Transformer
-            ref={transformerRef}
-            rotateEnabled={false}
-            boundBoxFunc={(_oldBox, newBox) => newBox}
-          />
-        )}
-
+        {/* 5. Fog / gradient effects */}
         {fogEnabled && fogHeight > 0 && (
           <Rect
             ref={fogNodeRef}
@@ -482,6 +479,7 @@ function CompositeStage({
           />
         )}
 
+        {/* 6. Name overlay */}
         {nameOverlayImg && (
           <KonvaImage
             image={nameOverlayImg}
@@ -493,6 +491,7 @@ function CompositeStage({
           />
         )}
 
+        {/* 7. Danger zone crop guides */}
         {dangerZoneRects.map(({ label, zoneX, zoneY, zoneW, zoneH }) => (
           <Rect
             key={label}
@@ -506,6 +505,15 @@ function CompositeStage({
             listening={false}
           />
         ))}
+
+        {/* 8. Transformer — MUST be last so handles render above all effect layers */}
+        {subjectImg && (
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled={false}
+            boundBoxFunc={(_oldBox, newBox) => newBox}
+          />
+        )}
       </Layer>
     </Stage>
   );
@@ -740,9 +748,8 @@ export default function KonvaCanvas({
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         return;
       }
-      if (document.activeElement?.tagName === 'INPUT') {
-        return;
-      }
+      const tag = document.activeElement?.tagName ?? '';
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
 
       e.preventDefault();
       const px = e.shiftKey ? NUDGE_SHIFT_PX : NUDGE_PX;
@@ -889,7 +896,7 @@ export default function KonvaCanvas({
             fogHeight={fogHeight}
             handleDragEnd={handleDragEnd}
             dangerZoneRects={dangerZoneRects}
-            scale={scale}
+            scale={sideScale}
           />
         </div>
       </div>

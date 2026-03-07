@@ -111,11 +111,16 @@ export function getEnv(): EnvConfig {
 /**
  * R2-only validation — checks only R2 credentials.
  * Returns null if unconfigured and logs a warning (graceful 503 path).
+ * Cached per module instance to avoid repeated console.warn on every request.
  */
-export function getR2Env(): Pick<
+type R2EnvResult = Pick<
   EnvConfig,
   "R2_ACCESS_KEY_ID" | "R2_SECRET_ACCESS_KEY" | "R2_BUCKET_NAME" | "R2_ENDPOINT"
-> | null {
+> | null;
+
+let _r2EnvCache: R2EnvResult | undefined = undefined;
+
+function _computeR2Env(): R2EnvResult {
   const id = process.env.R2_ACCESS_KEY_ID;
   const secret = process.env.R2_SECRET_ACCESS_KEY;
   const bucket = process.env.R2_BUCKET_NAME;
@@ -142,4 +147,11 @@ export function getR2Env(): Pick<
     R2_BUCKET_NAME: bucket,
     R2_ENDPOINT: endpoint,
   };
+}
+
+export function getR2Env(): R2EnvResult {
+  if (_r2EnvCache === undefined) {
+    _r2EnvCache = _computeR2Env();
+  }
+  return _r2EnvCache;
 }

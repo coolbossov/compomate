@@ -108,6 +108,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       applySessionCookie(response, sessionId, isNew);
       return response;
     }
+    if (name.length > 200) {
+      const response = NextResponse.json(
+        { error: "Template name must be 200 characters or less." },
+        { status: 400 },
+      );
+      applySessionCookie(response, sessionId, isNew);
+      return response;
+    }
 
     const { data, error } = await supabase!
       .from(DB_TABLES.TEMPLATES)

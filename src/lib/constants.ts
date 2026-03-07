@@ -12,8 +12,8 @@ export const CANVAS_ASPECT_RATIO = 4 / 5;
 // --- Crop Safety Zones (fraction of 4:5 canvas) ---
 // These define crop zones for printing, NOT export dimensions
 export const CROP_ZONES = {
-  "4x6": { widthFrac: 0.667, heightFrac: 1.0 }, // 4:6 portrait crop of 4:5 canvas
-  "5x7": { widthFrac: 0.714, heightFrac: 1.0 }, // 5:7 portrait crop of 4:5 canvas
+  "4x6": { widthFrac: 0.833, heightFrac: 1.0 }, // 4:6 portrait inscribed in 4000×5000: width=5000*(4/6)=3333px → 3333/4000
+  "5x7": { widthFrac: 0.893, heightFrac: 1.0 }, // 5:7 portrait inscribed in 4000×5000: width=5000*(5/7)=3571px → 3571/4000
 } as const;
 
 // --- File Limits ---

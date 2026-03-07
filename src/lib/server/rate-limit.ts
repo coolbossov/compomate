@@ -42,9 +42,17 @@ export function checkRateLimit(
 }
 
 export function requestIp(headers: Headers): string {
+  // Vercel sets this to the actual client IP (trusted, not spoofable)
+  const vercelIp = headers.get("x-vercel-forwarded-for");
+  if (vercelIp) return vercelIp.split(",")[0].trim();
+
+  // Fallback: use the RIGHTMOST x-forwarded-for entry (set by the last trusted proxy)
+  // NOT the leftmost (which is client-controlled)
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? "unknown";
+    const parts = forwarded.split(",").map((p) => p.trim());
+    return parts[parts.length - 1] ?? "unknown";
   }
-  return headers.get("x-real-ip") ?? "unknown";
+
+  return "unknown";
 }

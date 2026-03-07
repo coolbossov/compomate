@@ -23,6 +23,7 @@ import {
   BACKDROP_DEFAULT_STYLE_HINT,
   PROJECT_SNAPSHOT_VERSION,
 } from '@/lib/constants';
+import { Loader2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type {
   FalBackdropPendingPayload,
@@ -199,7 +200,9 @@ export function BackdropPanel() {
   function handleDrop(e: React.DragEvent): void {
     e.preventDefault();
     setIsDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+    const files = Array.from(e.dataTransfer.files).filter(
+      (f) => f.type.startsWith('image/') || /\.(tif|tiff)$/i.test(f.name)
+    );
     void handleBackdropFiles(files);
   }
 
@@ -559,6 +562,16 @@ export function BackdropPanel() {
             />
 
             {/* Generation status */}
+            {(generation.status === 'generating' || generation.status === 'polling') && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground px-1 py-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>
+                  {generation.status === 'generating'
+                    ? 'Sending to AI...'
+                    : `Generating backdrop${generation.queuePosition ? ` (queue: ${generation.queuePosition})` : '...'}`}
+                </span>
+              </div>
+            )}
             {generation.status === 'polling' && generation.queuePosition !== undefined && (
               <p className="text-xs text-[var(--text-soft)]">Queue position: {generation.queuePosition}</p>
             )}
@@ -598,7 +611,7 @@ export function BackdropPanel() {
               >
                 {isGeneratingFlux ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin">⟳</span> Generating with Flux…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating with Flux…
                   </span>
                 ) : 'Generate with Flux'}
               </button>
@@ -630,7 +643,7 @@ export function BackdropPanel() {
               >
                 {isGeneratingIdeogram ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin">⟳</span> Generating with Ideogram…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating with Ideogram…
                   </span>
                 ) : 'Generate with Ideogram'}
               </button>
@@ -673,7 +686,7 @@ export function BackdropPanel() {
             >
               {isAnalyzingRef ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">⟳</span> Analyzing with Gemini…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing with Gemini…
                 </span>
               ) : 'Analyze Reference Photo'}
             </button>
@@ -701,7 +714,7 @@ export function BackdropPanel() {
                 >
                   {isGeneratingFromRef ? (
                     <span className="flex items-center justify-center gap-2">
-                      <span className="animate-spin">⟳</span> Generating…
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…
                     </span>
                   ) : 'Generate Backdrop from This Prompt'}
                 </button>

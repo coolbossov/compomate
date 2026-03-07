@@ -53,17 +53,33 @@ export async function renderNameOverlay(
   const firstFontPath = path.join(fontBasePath, fontPair.firstNameFont);
   const lastFontPath = path.join(fontBasePath, fontPair.lastNameFont);
   const fontFiles = [firstFontPath, lastFontPath];
+
+  let firstFontData: Buffer;
+  let lastFontData: Buffer;
+  try {
+    firstFontData = fs.readFileSync(firstFontPath);
+  } catch (e) {
+    console.warn(`[text.ts] Could not read font file: ${firstFontPath}`, e);
+    return canvasBuffer;
+  }
+  try {
+    lastFontData = fs.readFileSync(lastFontPath);
+  } catch (e) {
+    console.warn(`[text.ts] Could not read font file: ${lastFontPath}`, e);
+    return canvasBuffer;
+  }
+
   const textMetrics = measureNameOverlayTextMetrics(
     outputHeight,
     nameOverlay,
     {
       firstName: {
         key: firstFontPath,
-        data: fs.readFileSync(firstFontPath),
+        data: firstFontData,
       },
       lastName: {
         key: lastFontPath,
-        data: fs.readFileSync(lastFontPath),
+        data: lastFontData,
       },
     },
   );
@@ -80,7 +96,7 @@ export async function renderNameOverlay(
     return canvasBuffer;
   }
 
-  const overlayPng = new Resvg(svg, {
+  const overlayPng = Buffer.from(new Resvg(svg, {
     fitTo: { mode: 'width', value: outputWidth },
     font: {
       fontFiles,
@@ -88,7 +104,7 @@ export async function renderNameOverlay(
     },
   })
     .render()
-    .asPng();
+    .asPng());
 
   return sharp(canvasBuffer)
     .composite([{ input: overlayPng, left: 0, top: 0 }])

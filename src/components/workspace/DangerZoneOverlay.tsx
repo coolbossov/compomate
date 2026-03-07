@@ -23,17 +23,36 @@ export function DangerZoneOverlay({ canvasWidth, canvasHeight }: DangerZoneOverl
   const zone5x7Left = (canvasWidth - zone5x7W) / 2;
   const zone5x7Top = (canvasHeight - zone5x7H) / 2;
 
+  // 4-panel dimming around the outermost (5×7) zone — percentage-based so it
+  // scales with the container regardless of pixel dimensions.
+  const outer = CROP_ZONES['5x7'];
+  const dimCropX = ((1 - outer.widthFrac) / 2) * 100;
+  const dimCropY = ((1 - outer.heightFrac) / 2) * 100;
+  const dimCropW = outer.widthFrac * 100;
+  const dimCropH = outer.heightFrac * 100;
+
   return (
     <div className="pointer-events-none absolute inset-0">
-      {/* Semi-transparent dark overlay outside crop zones */}
+      {/* 4-panel dimming: top, bottom, left, right around the 5×7 safe zone */}
+      {/* Top */}
       <div
-        className="absolute inset-0 bg-black/40"
-        style={{
-          maskImage: `
-            radial-gradient(circle, transparent 0%, transparent 100%),
-            linear-gradient(black, black)
-          `,
-        }}
+        className="absolute bg-black/40 left-0 right-0"
+        style={{ top: 0, height: `${dimCropY}%` }}
+      />
+      {/* Bottom */}
+      <div
+        className="absolute bg-black/40 left-0 right-0"
+        style={{ top: `${dimCropY + dimCropH}%`, bottom: 0 }}
+      />
+      {/* Left */}
+      <div
+        className="absolute bg-black/40"
+        style={{ top: `${dimCropY}%`, height: `${dimCropH}%`, left: 0, width: `${dimCropX}%` }}
+      />
+      {/* Right */}
+      <div
+        className="absolute bg-black/40"
+        style={{ top: `${dimCropY}%`, height: `${dimCropH}%`, left: `${dimCropX + dimCropW}%`, right: 0 }}
       />
 
       {/* 4x6 crop zone — red dashed */}

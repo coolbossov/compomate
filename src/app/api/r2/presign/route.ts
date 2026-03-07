@@ -51,7 +51,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get("origin");
   const host = request.headers.get("host");
   if (origin) {
-    const originHost = new URL(origin).host;
+    let originHost: string;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+    }
     if (host && originHost !== host) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

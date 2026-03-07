@@ -11,6 +11,7 @@ export interface ToastMessage {
   id: number;
   message: string;
   durationMs: number;
+  type?: 'error' | 'success' | 'info';
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +123,7 @@ export interface UISlice {
   setShowDangerZone: (v: boolean) => void;
   setShowSafeArea: (v: boolean) => void;
   setCanvasZoom: (zoom: number) => void;
-  showToast: (message: string, durationMs?: number) => void;
+  showToast: (message: string, durationMs?: number, type?: 'error' | 'success' | 'info') => void;
   clearToast: () => void;
 }
 
@@ -147,4 +148,6 @@ export type UndoableState = {
   fontPairId: FontPairId;
   firstName: string;
   lastName: string;
+  nameSizePct: number;
+  nameYFromBottomPct: number;
 };

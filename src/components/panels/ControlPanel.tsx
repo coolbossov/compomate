@@ -91,7 +91,8 @@ function SectionHeader({
         type="button"
         onClick={onReset}
         className="p-1 rounded hover:bg-[#2A2A38] text-[#6367FF] opacity-60 hover:opacity-100 transition-opacity"
-        title="Reset to defaults"
+        title={`Reset ${title} to defaults`}
+        aria-label={`Reset ${title} to defaults`}
       >
         <RotateCcw size={12} />
       </button>

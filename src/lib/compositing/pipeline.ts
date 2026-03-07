@@ -99,6 +99,7 @@ export async function runCompositorPipeline(
     xPct: clamp(composition.xPct, 5, 95),
     yPct: clamp(composition.yPct, 25, 96),
     subjectHeightPct: clamp(composition.subjectHeightPct, 20, 95),
+    reflectionSizePct: clamp(composition.reflectionSizePct ?? 0, 0, 200),
     reflectionPositionPct: clamp(composition.reflectionPositionPct, 65, 140),
     reflectionOpacityPct: clamp(composition.reflectionOpacityPct, 0, 100),
     reflectionBlurPx: clamp(composition.reflectionBlurPx, 0, 20),
@@ -130,7 +131,7 @@ export async function runCompositorPipeline(
       width: outputWidth,
       height: targetSubjectHeight,
       fit: 'inside',
-      withoutEnlargement: true,
+      // withoutEnlargement removed — subjects must scale up to fill the canvas
     })
     .png()
     .toBuffer();
@@ -221,7 +222,7 @@ export async function runCompositorPipeline(
   const finalBuffer = await sharp(canvasBuffer)
     .toColorspace('srgb')
     .withMetadata({ density: EXPORT_DPI })
-    .png({ compressionLevel: 9 })
+    .png({ compressionLevel: 6 })
     .toBuffer();
 
   return {

@@ -6,6 +6,196 @@
 
 ---
 
+## [Unreleased] — 2026-03-07 — Second Audit Pass (Claude claude-sonnet-4-6)
+
+### Summary
+Five parallel specialist agents (Canvas, Export Pipeline, Store/State, API Security, UI/UX) audited the full codebase post-remediation. Found 40+ issues across severity levels. All critical and high items implemented immediately. 29 files changed, 319 insertions, 115 deletions.
+
+### CRITICAL Fixes
+
+**reflect.ts — Reflection was entirely invisible (pre-flip zeroing in wrong index space)**
+- Zeroing loop iterated the wrong direction — was zeroing the feet region and keeping the body, making the reflection show nothing or inverted content
+- Fixed: loop now zeroes rows `0..lowestRow` (above-feet region in pre-flip space), which become the bottom-transparent region after flip, leaving feet at the top of the reflection
+
+**constants.ts — CROP_ZONES widthFrac used wrong math (guides were 25% too narrow)**
+- `4×6` was `0.667` (the ratio itself, not the canvas fraction) — should be `0.833` (5000px × 4/6 ÷ 4000px)
+- `5×7` was `0.714` — corrected to `0.893`
+- Photographers composing shots using the guides were leaving insufficient margin
+
+**store/index.ts — SSR crash: `sessionStorage` was used as the server-side fallback**
+- `sessionStorage` is browser-only; falls through to it on server → `ReferenceError`
+- Replaced with a proper no-op storage `{ getItem: () => null, setItem: () => {}, removeItem: () => {} }`
+
+**SessionResumeDialog.tsx — "Start fresh" destroyed all work with zero confirmation**
+- Single click on first-load dialog could wipe the entire session
+- Added a two-step confirmation: first click shows inline "Clear all work?" prompt with Yes/Cancel
+
+### HIGH Fixes
+
+**reflect.ts — `reflectionBlurPx` was wired through the pipeline but never read**
+- `BLUR_LAYERS` was fully hardcoded; the blur slider did nothing to export output
+- Added `blurMultiplier = reflectionBlurPx / 10` scaling applied to each layer's `blurPx`
+
+**pipeline.ts — `withoutEnlargement: true` silently prevented small subjects from scaling**
+- Subjects under the target height were left at their original (small) size regardless of the height-% slider
+- Removed the flag; subjects now always scale to fill the configured `subjectHeightPct`
+
+**text.ts — `asPng()` returned `Uint8Array` but Sharp typed `composite.input` as `Buffer`**
+- Wrapped result in `Buffer.from(...)` to satisfy Sharp's types and prevent potential runtime mismatch
+
+**text.ts — `fs.readFileSync` crashed the entire export if a font file was missing**
+- Added individual `try/catch` around each font read; on failure logs a warning and returns `canvasBuffer` unchanged (name overlay skipped gracefully)
+
+**export/route.ts — Base64 fallback would produce 11–55 MB response body (Vercel cap: 4.5 MB)**
+- Replaced fallback with a structured `503 { error, retryable: true }` response
+- R2 is now treated as required for 4000×5000 exports; inline delivery is not viable at this resolution
+
+**KonvaCanvas.tsx — Z-order bug: shadow rendered before reflection**
+- Shadow was buried under the reflection layer, making it invisible when both were enabled
+- Fixed render order: Backdrop → Reflection → Shadow → Subject → Effects → Transformer
+
+**KonvaCanvas.tsx — `<Transformer>` handles were obscured by fog and name overlay**
+- Transformer was mid-layer; fog and name overlay rendered on top, hiding resize handles
+- Moved Transformer to be the last child in the Layer (always renders on top)
+
+**KonvaCanvas.tsx — Side-by-side danger zone passed `scale` instead of `sideScale`**
+- Stroke width and dash pattern in side-by-side right panel used full-width base scale
+- Fixed to pass `sideScale` (accounts for half-width + zoom)
+
+**store/index.ts — `nameSizePct` and `nameYFromBottomPct` not persisted or undoable**
+- Both fields were missing from `persistPartialize` (lost on page reload) and `temporalPartialize` (not tracked in undo history)
+- Added to both; also added to `UndoableState` type in types.ts
+
+**exportSlice.ts + ExportPanel.tsx — `removeBatchItem` had no guard for in-flight items**
+- Removing a `running` item orphaned it mid-export, causing counter/zip mismatch
+- Slice now early-returns if `status === 'running'`; Remove button gets `disabled={item.status === 'running'}`
+
+**ControlPanel.tsx — 5 icon-only reset buttons had no `aria-label`**
+- `title` attribute is not reliably announced by screen readers
+- Added `aria-label="Reset [Section] to defaults"` to each instance
+
+**rate-limit.ts — X-Forwarded-For spoofing bypassed all rate limits**
+- Was reading the leftmost (client-controlled) `x-forwarded-for` entry
+- Now reads `x-vercel-forwarded-for` first (Vercel-trusted), falls back to rightmost XFF entry
+
+**BackdropPanel.tsx — `generating` status phase had no inline feedback**
+- The `generating` → `polling` transition (3–8s) showed nothing in the panel body
+- Added inline `Loader2` + status text that shows for both `generating` and `polling` states
+
+**ExportPanel.tsx — Completed batch items didn't show filename or offer re-download**
+- `exportedFilename` was stored in the batch item but never rendered
+- Now displayed as truncated text under the item label when `status === 'done'`
+
+**BackdropPanel.tsx — `loadProject()` replaced all work silently**
+- Calling it wiped subjects, backdrop, and name data with no confirmation
+- Added `window.confirm` before executing the replacement
+
+### MEDIUM Fixes
+
+**KonvaCanvas.tsx — Arrow key nudge fired inside TEXTAREA and SELECT**
+- Was only guarding against `INPUT`; textarea (backdrop prompt) and select were unblocked
+- Added both to the exclusion list
+
+**DangerZoneOverlay.tsx — CSS mask was entirely non-functional**
+- `radial-gradient(transparent 0%, transparent 100%)` → fully transparent mask → no effect
+- Replaced with four real positioned `<div>` panels dimming the area outside the crop zone
+
+**BackdropPanel.tsx — Drop zone silently rejected TIFF files on Windows/Chrome**
+- TIFF files dragged from Windows/Chrome report `type: "application/octet-stream"` not `"image/tiff"`
+- Added extension fallback: `|| /\.(tif|tiff)$/i.test(f.name)`
+
+**ExportPanel.tsx — Queue buttons never disabled (silent no-op when no assets)**
+- Buttons with no subject/backdrop selected did nothing with no feedback
+- Added `disabled` conditions matching the actual queue requirements per button
+
+**types/export.ts — `ExportQueueSummary` was missing `cancelled` field**
+- `cancelled` items existed in `BatchStatus` but weren't counted, causing `total ≠ sum of fields`
+- Added `cancelled: number` and wired the accumulator
+
+**uiSlice.ts — `Date.now()` toast ID caused Sonner deduplication on rapid calls**
+- Two toasts within 1ms shared the same ID and the second replaced the first
+- Replaced with a module-level incrementing `_toastSeq` counter
+
+**filesSlice.ts — `prevSubject` selected `N-2` when `activeSubjectId` was stale**
+- `findIndex` returning `-1` → `(-1 - 1 + N) % N = N - 2` (wrong item)
+- Added stale-ID guard for both `prevSubject` and `nextSubject`
+
+**store/index.ts — `leftTab` and `showSafeArea` not persisted across reloads**
+- Tab selection and safe-area toggle reset silently on every page load
+- Added both to `persistPartialize`
+
+**r2/presign/route.ts — `new URL(origin)` unguarded, crashes on malformed Origin header**
+- Malformed Origin → `TypeError` → unhandled 500 instead of clean 400/403
+- Wrapped in try/catch, returns 403 on parse failure
+
+**analyze-reference/route.ts — No MIME type validation or size limit on imageDataUrl**
+- Any content type forwarded to Gemini; no cap on payload size
+- Added 10 MB size guard + allowlist: `image/jpeg`, `image/png`, `image/webp`, `image/gif`
+
+**generate-backdrop/route.ts + analyze-reference/route.ts — Env var names leaked in errors**
+- Error messages included `FAL_KEY` and `GEMINI_API_KEY` verbatim
+- Replaced with generic "AI image generation service is not configured." / "AI analysis service is not configured."
+
+**templates/route.ts — Template name had no max-length validation**
+- Unbounded name could inflate list query response payloads
+- Added 200-character limit with a 400 response
+
+**projects/route.ts — `request.json()` in POST not wrapped in try/catch**
+- Malformed body threw `SyntaxError` → unhandled 500
+- Wrapped, returns 400 "Invalid request body."
+
+**projects/route.ts + [projectId]/route.ts — Raw Supabase error messages returned to client**
+- Table/column names leaked in error responses
+- All database errors now logged server-side; generic messages returned to client
+
+**SessionResumeDialog.tsx — Showed wall-clock time, not relative session age**
+- "9:30 PM" from last night is misleading on a morning reload
+- Added `formatSessionAge()` returning e.g. "3 hours ago", "1 day ago"
+
+**TemplatesPanel.tsx — Template delete fired immediately with no confirmation**
+- One click permanently deleted a template
+- Added `window.confirm` before firing the delete request
+
+**EmptyState.tsx — Said "Files tab" but the tab is labeled "Subjects"**
+- Stale copy confused new users
+- Updated to "Subjects tab"
+
+### LOW Fixes
+
+**pipeline.ts — `compressionLevel: 9` was a batch throughput bottleneck**
+- Maximum zlib compression adds 2–5s per image; saves only 5–10% over level 6
+- Changed to `compressionLevel: 6`
+
+**pipeline.ts — `reflectionSizePct` not clamped in the `comp` object**
+- `undefined` or `NaN` would silently disable reflection; fixed with explicit clamp
+
+**BackdropPanel.tsx + ExportPanel.tsx — Unicode `⟳` spinner renders off-center**
+- `animate-spin` on inline text character spins around a non-centered pivot cross-browser
+- Replaced with `<Loader2 className="h-3.5 w-3.5 animate-spin" />` (lucide-react)
+
+**ToastBridge.tsx — All store toasts were neutral regardless of severity**
+- `showToast` gained optional `type?: 'error' | 'success' | 'info'`
+- ToastBridge now routes to `toast.error()` / `toast.success()` / `toast()` accordingly
+
+**env.ts — `getR2Env()` uncached; logged `console.warn` on every request**
+- Added module-level `_r2EnvCache`; warn fires only once per instance
+
+**export/route.ts — No timeout wrapper on compositor pipeline**
+- A hung Sharp pipeline would run until Vercel's 300s hard kill with no structured response
+- Added `Promise.race` with 270s timeout → returns 503 `{ retryable: true }` on expiry
+
+**projects/route.ts + [projectId]/route.ts — Missing `maxDuration` export**
+- Routes defaulted to 10s plan limit; explicit `export const maxDuration = 10` added
+
+### Verification
+- `npm run lint` — 0 violations
+- `npx tsc --noEmit` — 0 errors
+- `npm run build` — 0 errors, 12 routes compiled
+
+---
+
+---
+
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
 ### Session: 2026-03-07 — Codex (GPT-5)
@@ -126,6 +316,16 @@
 ---
 
 ### Session: 2026-03-07 — Codex (GPT-5)
+
+#### Shareable run summary added
+- Added `LATEST_RUN_SUMMARY.md` at repo root as a handoff document for another developer or AI.
+- It captures:
+  - the completed scope of the audit-fix run
+  - product decisions made during implementation
+  - major files touched and why
+  - verification performed
+  - production deployment URLs and commit identifiers
+  - what future developers should update when behavior changes
 
 #### Commit + deploy handoff preparation
 - Final implementation pass is complete and verified in the working tree.

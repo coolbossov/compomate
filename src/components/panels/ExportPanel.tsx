@@ -198,10 +198,11 @@ export function ExportPanel() {
       else if (item.status === 'running') summary.running += 1;
       else if (item.status === 'pending') summary.pending += 1;
       else if (item.status === 'failed') summary.failed += 1;
+      else if (item.status === 'cancelled') summary.cancelled += 1;
       summary.total += 1;
       return summary;
     },
-    { done: 0, running: 0, pending: 0, failed: 0, total: 0 },
+    { done: 0, running: 0, pending: 0, failed: 0, cancelled: 0, total: 0 },
   );
 
   // ---------------------------------------------------------------------------
@@ -564,13 +565,28 @@ export function ExportPanel() {
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <button className="btn-secondary" type="button" onClick={queueCurrentPair}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={queueCurrentPair}
+            disabled={!activeSubject || !activeBackdrop}
+          >
             Queue Pair
           </button>
-          <button className="btn-secondary" type="button" onClick={queueSubjectAcrossBackdrops}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={queueSubjectAcrossBackdrops}
+            disabled={!activeSubject || backdrops.length === 0}
+          >
             Subject x All
           </button>
-          <button className="btn-secondary" type="button" onClick={queueAllSubjectsOnBackdrop}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={queueAllSubjectsOnBackdrop}
+            disabled={!activeBackdrop || subjects.length === 0}
+          >
             Backdrop x All
           </button>
         </div>
@@ -588,6 +604,7 @@ export function ExportPanel() {
               <button
                 type="button"
                 className="asset-remove"
+                disabled={item.status === 'running'}
                 onClick={() => removeBatchItem(item.id)}
                 aria-label={`Remove ${item.label} from batch`}
                 title={`Remove ${item.label} from batch`}

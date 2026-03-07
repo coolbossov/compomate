@@ -80,13 +80,10 @@ export async function createReflection(
   // In the flipped image, row `r` corresponds to original row `(subjH - 1 - r)`.
   // Rows in original that are above `lowestRow` should be zeroed in the reflection.
   const flippedData = Buffer.from(rawData);
-  for (let y = 0; y < subjH; y++) {
-    const originalRow = subjH - 1 - y;
-    if (originalRow < lowestRow) {
-      // This row is above the feet line — erase it in the reflection
-      for (let x = 0; x < subjW; x++) {
-        flippedData[(y * subjW + x) * channels + 3] = 0;
-      }
+  // Zero rows ABOVE feet in original space (they become bottom of reflection after flip)
+  for (let y = 0; y < lowestRow; y++) {
+    for (let x = 0; x < subjW; x++) {
+      flippedData[(y * subjW + x) * channels + 3] = 0;
     }
   }
 
@@ -109,13 +106,20 @@ export async function createReflection(
     .toBuffer();
 
   // ── Steps 5 & 6: per-band blur + opacity ────────────────────────────────
-  const bandH = Math.max(1, Math.floor(reflH / BLUR_LAYERS.length));
+  // Scale blur layers by reflectionBlurPx (slider 0–20; midpoint 10 = multiplier 1.0)
+  const blurMultiplier = Math.max(0.1, composition.reflectionBlurPx / 10);
+  const scaledLayers = BLUR_LAYERS.map(layer => ({
+    ...layer,
+    blurPx: Math.max(0.5, layer.blurPx * blurMultiplier),
+  }));
+
+  const bandH = Math.max(1, Math.floor(reflH / scaledLayers.length));
   const compositeBands: sharp.OverlayOptions[] = [];
 
-  for (let i = 0; i < BLUR_LAYERS.length; i++) {
-    const layer = BLUR_LAYERS[i]!;
+  for (let i = 0; i < scaledLayers.length; i++) {
+    const layer = scaledLayers[i]!;
     const bandTop = i * bandH;
-    const bandBottom = i === BLUR_LAYERS.length - 1 ? reflH : (i + 1) * bandH;
+    const bandBottom = i === scaledLayers.length - 1 ? reflH : (i + 1) * bandH;
     const actualBandH = Math.max(1, bandBottom - bandTop);
 
     // Apply blur to the full scaled image, then extract this band's strip

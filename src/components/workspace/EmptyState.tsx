@@ -17,7 +17,7 @@ const configs = {
   'no-subject': {
     Icon: Users,
     title: 'No subject added',
-    subtitle: 'Add transparent PNG or TIFF subject files using the Files tab',
+    subtitle: 'Add transparent PNG or TIFF subject files using the Subjects tab',
   },
 } as const;
 

@@ -35,8 +35,20 @@ function getInitialDialogState(): ResumeDialogState {
   return { show: false, session: null };
 }
 
+function formatSessionAge(savedAt: number): string {
+  const diffMs = Date.now() - savedAt;
+  const diffMins = Math.round(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+  const diffHours = Math.round(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+}
+
 export function SessionResumeDialog() {
   const [{ show, session }, setDialogState] = useState<ResumeDialogState>(getInitialDialogState);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const setJobName = useStore((s) => s.setJobName);
   const setExportProfile = useStore((s) => s.setExportProfile);
   const setNameStyle = useStore((s) => s.setNameStyle);
@@ -73,10 +85,11 @@ export function SessionResumeDialog() {
 
   if (!show || !session) return null;
 
-  const savedTime = new Date(session.savedAt).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  function handleClearSession() {
+    clearSession();
+    void useStore.persist.clearStorage();
+    window.location.reload();
+  }
 
   return (
     <Dialog
@@ -92,20 +105,28 @@ export function SessionResumeDialog() {
         </DialogHeader>
         <p className="text-sm text-[#C9BEFF]">
           Found session <strong className="text-[var(--text-primary)]">{session.jobName}</strong>{' '}
-          from {savedTime}.
+          — saved {formatSessionAge(session.savedAt)}.
         </p>
         <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            className="border-[var(--panel-border)] text-[var(--text-soft)] hover:text-[var(--text-primary)]"
-            onClick={() => {
-              clearSession();
-              void useStore.persist.clearStorage();
-              window.location.reload();
-            }}
-          >
-            Start fresh
-          </Button>
+          {!confirmingClear ? (
+            <Button
+              variant="outline"
+              className="border-[var(--panel-border)] text-[var(--text-soft)] hover:text-[var(--text-primary)]"
+              onClick={() => setConfirmingClear(true)}
+            >
+              Start fresh
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-destructive">Clear all work?</span>
+              <Button variant="destructive" size="sm" onClick={handleClearSession}>
+                Yes, clear
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmingClear(false)}>
+                Cancel
+              </Button>
+            </div>
+          )}
           <Button
             className="bg-[#6367FF] hover:bg-[#7478FF] text-white"
             onClick={() => {

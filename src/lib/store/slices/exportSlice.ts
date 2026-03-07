@@ -35,7 +35,9 @@ export const createExportSlice: ExportSliceCreator = (set) => ({
   removeBatchItem: (id: string) =>
     set((draft) => {
       const idx = draft.batchItems.findIndex((b: BatchItem) => b.id === id);
-      if (idx !== -1) draft.batchItems.splice(idx, 1);
+      if (idx === -1) return;
+      if (draft.batchItems[idx].status === 'running') return; // don't remove in-flight items
+      draft.batchItems.splice(idx, 1);
     }),
 
   clearBatch: () =>
