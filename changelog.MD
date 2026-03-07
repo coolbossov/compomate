@@ -8,6 +8,22 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-07 — Codex (GPT-5)
+
+#### Planned action item — dual-person composite support
+- Added requested follow-up work for CompoMate: support using two source images for a single generated/composited image so the final output can include two people.
+- Intended product behavior:
+  - allow selecting or uploading two subject images for one composition
+  - place and adjust each person independently in the canvas
+  - preserve both subjects through export/generation
+  - store the two-subject setup in project/template state so it can be reopened later
+- Main implementation areas likely affected:
+  - asset and project data model
+  - subject selection/upload UI
+  - canvas controls and per-subject transforms
+  - export/compositing pipeline
+  - batch/template/session persistence
+
 ### Session: 2026-03-07 — Claude (claude-opus-4-6) — Final Assembly
 
 #### All 5 batches complete — ready for merge
