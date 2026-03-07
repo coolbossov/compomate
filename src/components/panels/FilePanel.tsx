@@ -6,12 +6,14 @@ import { useStore } from '@/lib/store';
 import { useSubjects } from '@/lib/store/selectors';
 import { filesToAssets, collectImageFiles } from '@/lib/client/utils';
 import { computeAutoPlacement } from '@/lib/client/autoPlacement';
+import { uploadFileToR2 } from '@/lib/client/uploader';
 
 export function FilePanel() {
   const subjects = useSubjects();
   const activeSubjectId = useStore((s) => s.activeSubjectId);
   const addSubjects = useStore((s) => s.addSubjects);
   const removeSubject = useStore((s) => s.removeSubject);
+  const updateSubject = useStore((s) => s.updateSubject);
   const setActiveSubject = useStore((s) => s.setActiveSubject);
   const showToast = useStore((s) => s.showToast);
   const updateComposition = useStore((s) => s.updateComposition);
@@ -43,6 +45,23 @@ export function FilePanel() {
     addSubjects(assets);
     const suffix = skipped.length > 0 ? ` ${skipped.slice(0, 2).join(' ')}` : '';
     showToast(`Added ${assets.length} subject file(s).${suffix}`);
+
+    for (let i = 0; i < limitedUploadCount(files, assets); i += 1) {
+      const file = files[i];
+      const asset = assets[i];
+      if (!file || !asset) continue;
+      uploadFileToR2(file, 'subject')
+        .then(({ key }) => {
+          updateSubject(asset.id, { r2Key: key });
+        })
+        .catch(() => {
+          // Non-critical: exports fall back to data URLs when R2 is unavailable.
+        });
+    }
+  }
+
+  function limitedUploadCount(files: File[], assets: { id: string }[]): number {
+    return Math.min(files.length, assets.length);
   }
 
   function triggerFilePicker(mode: 'files' | 'folder'): void {

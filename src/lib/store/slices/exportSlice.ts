@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { AppState, ExportSlice } from '../types';
-import type { BatchItem, ExportQueueSummary } from '@/types/export';
+import type { BatchItem } from '@/types/export';
 import { DEFAULT_JOB_NAME } from '@/lib/constants';
 
 export type ExportSliceCreator = StateCreator<
@@ -10,7 +10,7 @@ export type ExportSliceCreator = StateCreator<
   ExportSlice
 >;
 
-export const createExportSlice: ExportSliceCreator = (set, get) => ({
+export const createExportSlice: ExportSliceCreator = (set) => ({
   jobName: DEFAULT_JOB_NAME,
   batchItems: [],
   exportCounter: 0,
@@ -52,15 +52,4 @@ export const createExportSlice: ExportSliceCreator = (set, get) => ({
     set((draft) => {
       draft.exportCounter += 1;
     }),
-
-  getQueueSummary: (): ExportQueueSummary => {
-    const { batchItems } = get();
-    return {
-      done: batchItems.filter((i) => i.status === 'done').length,
-      running: batchItems.filter((i) => i.status === 'running').length,
-      pending: batchItems.filter((i) => i.status === 'pending').length,
-      failed: batchItems.filter((i) => i.status === 'failed').length,
-      total: batchItems.length,
-    };
-  },
 });

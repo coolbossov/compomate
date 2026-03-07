@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdminClient, isSupabaseConfigured } from "@/lib/server/supabase-admin";
 import { DB_TABLES } from "@/lib/constants";
+import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -24,6 +25,7 @@ function applySessionCookie(response: NextResponse, sessionId: string, isNew: bo
       sameSite: "lax",
       maxAge: SESSION_MAX_AGE,
       path: "/",
+      secure: process.env.NODE_ENV === "production",
     });
   }
 }
@@ -32,7 +34,16 @@ function applySessionCookie(response: NextResponse, sessionId: string, isNew: bo
 // GET /api/templates — list templates for the current session
 // ---------------------------------------------------------------------------
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const ip = requestIp(request.headers);
+  const limit = checkRateLimit(`templates:list:${ip}`, 80, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many template requests. Please wait and retry." },
+      { status: 429 },
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ templates: [], configured: false, reason: "Supabase not configured." });
   }
@@ -73,6 +84,15 @@ type SaveTemplateBody = {
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const ip = requestIp(request.headers);
+  const limit = checkRateLimit(`templates:save:${ip}`, 30, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many template save attempts. Please wait and retry." },
+      { status: 429 },
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }

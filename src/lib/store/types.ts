@@ -4,7 +4,7 @@
 import type { Asset } from '@/types/files';
 import type { BackdropAsset, BackdropGenerationState } from '@/types/backdrop';
 import type { CompositionState, ExportProfileId, NameStyleId } from '@/lib/shared/composition';
-import type { BatchItem, ExportQueueSummary } from '@/types/export';
+import type { BatchItem } from '@/types/export';
 import type { FontPairId } from '@/types/composition';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,9 @@ export interface FilesSlice {
   subjects: Asset[];
   activeSubjectId: string | null;
   addSubjects: (assets: Asset[]) => void;
+  replaceSubjects: (assets: Asset[]) => void;
   removeSubject: (id: string) => void;
+  updateSubject: (id: string, patch: Partial<Asset>) => void;
   setActiveSubject: (id: string | null) => void;
   nextSubject: () => void;
   prevSubject: () => void;
@@ -30,6 +32,7 @@ export interface BackdropSlice {
   activeBackdropId: string | null;
   generation: BackdropGenerationState;
   addBackdrop: (asset: BackdropAsset) => void;
+  replaceBackdrops: (assets: BackdropAsset[]) => void;
   removeBackdrop: (id: string) => void;
   updateBackdrop: (id: string, patch: Partial<BackdropAsset>) => void;
   setActiveBackdrop: (id: string | null) => void;
@@ -93,7 +96,6 @@ export interface ExportSlice {
   clearBatch: () => void;
   setApprovalGiven: (v: boolean) => void;
   incrementExportCounter: () => void;
-  getQueueSummary: () => ExportQueueSummary;
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import {
 } from "@/lib/server/supabase-admin";
 import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
-import type { ProjectSnapshot } from "@/lib/shared/project-snapshot";
+import { isProjectSnapshot, type ProjectSnapshot } from "@/lib/shared/project-snapshot";
 
 export const runtime = "nodejs";
 
@@ -15,14 +15,6 @@ type SaveProjectBody = {
   name?: string;
   snapshot?: ProjectSnapshot;
 };
-
-function assertSnapshot(value: unknown): value is ProjectSnapshot {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const candidate = value as { version?: unknown };
-  return candidate.version === 1;
-}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
@@ -87,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!name) {
     return NextResponse.json({ error: "Project name is required." }, { status: 400 });
   }
-  if (!assertSnapshot(body.snapshot)) {
+  if (!isProjectSnapshot(body.snapshot)) {
     return NextResponse.json({ error: "Invalid project snapshot payload." }, { status: 400 });
   }
 

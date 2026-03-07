@@ -152,6 +152,7 @@ export const DEFAULT_FONT_PAIR: FontPairId = "classic";
 
 // --- Session Storage Keys ---
 export const SESSION_STORAGE_KEY = "compomate-session";
+export const SESSION_RESUME_STORAGE_KEY = "compomate-session-resume";
 export const TEMPLATES_STORAGE_KEY = "compomate-templates";
 
 // --- Supabase Tables ---
@@ -299,4 +300,4 @@ export const SHADOW_STANCE_WIDTH_MAX_FRAC = 0.8;
 export const BATCH_LABEL_MAX_CHARS = 64;
 
 // --- Project snapshot version ---
-export const PROJECT_SNAPSHOT_VERSION = 1;
+export const PROJECT_SNAPSHOT_VERSION = 2;

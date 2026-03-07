@@ -8,6 +8,10 @@ import type { BackdropAsset } from '@/types/backdrop';
 import type { ExportProfileId } from '@/lib/shared/composition';
 import { EXPORT_PROFILES } from '@/lib/shared/composition';
 import {
+  isProjectSnapshot as isSharedProjectSnapshot,
+  type ProjectSnapshot,
+} from '@/lib/shared/project-snapshot';
+import {
   MAX_FILE_BYTES,
   MAX_FILES_PER_IMPORT,
 } from '@/lib/constants';
@@ -174,6 +178,56 @@ export async function dataUrlToBackdropAsset(
     width: dims.width,
     height: dims.height,
     source: 'ai-flux',
+    prompt,
+    createdAt: Date.now(),
+  };
+}
+
+async function fetchR2Blob(key: string): Promise<Blob> {
+  const response = await fetch(`/api/r2/download?key=${encodeURIComponent(key)}`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(parseErrorText(await response.text()));
+  }
+
+  const payload = (await response.json()) as { downloadUrl?: string };
+  if (!payload.downloadUrl) {
+    throw new Error('Missing download URL for stored asset.');
+  }
+
+  const blobResponse = await fetch(payload.downloadUrl);
+  if (!blobResponse.ok) {
+    throw new Error(`Failed to download stored asset (${blobResponse.status}).`);
+  }
+
+  return blobResponse.blob();
+}
+
+export async function r2KeyToAsset(name: string, r2Key: string): Promise<Asset> {
+  const blob = await fetchR2Blob(r2Key);
+  const file = new File([blob], name, { type: blob.type || 'image/png' });
+  const asset = await fileToAsset(file);
+  return { ...asset, r2Key };
+}
+
+export async function r2KeyToBackdropAsset(
+  name: string,
+  r2Key: string,
+  prompt?: string,
+): Promise<BackdropAsset> {
+  const blob = await fetchR2Blob(r2Key);
+  const file = new File([blob], name, { type: blob.type || 'image/png' });
+  const objectUrl = URL.createObjectURL(file);
+  const dims = await loadImageDimensions(objectUrl);
+  return {
+    id: makeId(),
+    name,
+    objectUrl,
+    r2Key,
+    width: dims.width,
+    height: dims.height,
+    source: 'upload',
     prompt,
     createdAt: Date.now(),
   };
@@ -358,15 +412,8 @@ export async function detectBackdropLightDirection(
   return directionFromVector(brightXPct - footXPct, brightYPct - footYPct);
 }
 
-// ---------------------------------------------------------------------------
-// Project snapshot validation
-// ---------------------------------------------------------------------------
-
-import type { ProjectSnapshot } from '@/lib/shared/project-snapshot';
-
 export function isProjectSnapshot(value: unknown): value is ProjectSnapshot {
-  if (!value || typeof value !== 'object') return false;
-  return (value as { version?: unknown }).version === 1;
+  return isSharedProjectSnapshot(value);
 }
 
 // ---------------------------------------------------------------------------

@@ -7,17 +7,21 @@ import { useBackdrops, useGeneration } from '@/lib/store/selectors';
 import {
   filesToBackdropAssets,
   collectImageFiles,
+  dataUrlToAsset,
   dataUrlToBackdropAsset,
   parseErrorText,
   wait,
   isProjectSnapshot,
   fileToDataUrl,
+  r2KeyToAsset,
+  r2KeyToBackdropAsset,
 } from '@/lib/client/utils';
 import { uploadBlobToR2 } from '@/lib/client/uploader';
 import {
   BACKDROP_POLL_INTERVAL_MS,
   BACKDROP_MAX_POLLS,
   BACKDROP_DEFAULT_STYLE_HINT,
+  PROJECT_SNAPSHOT_VERSION,
 } from '@/lib/constants';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type {
@@ -25,7 +29,7 @@ import type {
   FalBackdropCompletedPayload,
 } from '@/types/export';
 import { isFalPending, isFalCompleted } from '@/types/export';
-import type { StoredProjectSummary } from '@/lib/shared/project-snapshot';
+import type { SerializedAsset, StoredProjectSummary } from '@/lib/shared/project-snapshot';
 
 // ---------------------------------------------------------------------------
 // Local type guards for fal payloads
@@ -57,6 +61,7 @@ export function BackdropPanel() {
   const activeBackdropId = useStore((s) => s.activeBackdropId);
   const generation = useGeneration();
   const addBackdrop = useStore((s) => s.addBackdrop);
+  const replaceBackdrops = useStore((s) => s.replaceBackdrops);
   const removeBackdrop = useStore((s) => s.removeBackdrop);
   const updateBackdrop = useStore((s) => s.updateBackdrop);
   const setActiveBackdrop = useStore((s) => s.setActiveBackdrop);
@@ -104,7 +109,7 @@ export function BackdropPanel() {
   const setNameStyle = useStore((s) => s.setNameStyle);
   const setExportProfile = useStore((s) => s.setExportProfile);
   const updateComposition = useStore((s) => s.updateComposition);
-  const addSubjects = useStore((s) => s.addSubjects);
+  const replaceSubjects = useStore((s) => s.replaceSubjects);
   const setActiveSubject = useStore((s) => s.setActiveSubject);
   const clearBatch = useStore((s) => s.clearBatch);
 
@@ -327,23 +332,42 @@ export function BackdropPanel() {
   const activeBackdrop = backdrops.find((b) => b.id === activeBackdropId) ?? null;
   const activeSubject = subjects.find((s) => s.id === activeSubjectId) ?? null;
 
+  async function serializeAsset(
+    asset: { name: string; objectUrl: string; r2Key?: string } | null,
+    fallbackFile?: File,
+  ): Promise<SerializedAsset | null> {
+    if (!asset) return null;
+    if (asset.r2Key) {
+      return { name: asset.name, r2Key: asset.r2Key };
+    }
+
+    if (fallbackFile) {
+      return {
+        name: asset.name,
+        dataUrl: await fileToDataUrl(fallbackFile),
+      };
+    }
+
+    const response = await fetch(asset.objectUrl);
+    const blob = await response.blob();
+    const file = new File([blob], asset.name, { type: blob.type });
+    return {
+      name: asset.name,
+      dataUrl: await fileToDataUrl(file),
+    };
+  }
+
   async function buildSnapshot() {
     const [serializedBackdrop, serializedSubject] = await Promise.all([
-      activeBackdrop
-        ? (async () => {
-            const resp = await fetch(activeBackdrop.objectUrl);
-            const blob = await resp.blob();
-            const file = new File([blob], activeBackdrop.name, { type: blob.type });
-            const dataUrl = await fileToDataUrl(file);
-            return { name: activeBackdrop.name, dataUrl };
-          })()
-        : Promise.resolve(null),
-      activeSubject
-        ? fileToDataUrl(activeSubject.file).then((dataUrl) => ({ name: activeSubject.name, dataUrl }))
-        : Promise.resolve(null),
+      serializeAsset(activeBackdrop),
+      serializeAsset(activeSubject, activeSubject?.file),
     ]);
     return {
-      version: 1, firstName, lastName, nameStyle: nameStyleId, exportProfile: exportProfileId,
+      version: PROJECT_SNAPSHOT_VERSION,
+      firstName,
+      lastName,
+      nameStyle: nameStyleId,
+      exportProfile: exportProfileId,
       composition, activeBackdrop: serializedBackdrop, activeSubject: serializedSubject,
     };
   }
@@ -395,19 +419,37 @@ export function BackdropPanel() {
       const snapshot = payload.project?.payload;
       if (!isProjectSnapshot(snapshot)) throw new Error('Stored project payload format is invalid.');
 
-      const { dataUrlToAsset, dataUrlToBackdropAsset: toBackdrop } = await import('@/lib/client/utils');
-      const nextBackdrop = snapshot.activeBackdrop ? await toBackdrop(snapshot.activeBackdrop.name, snapshot.activeBackdrop.dataUrl) : null;
-      const nextSubject = snapshot.activeSubject ? await dataUrlToAsset(snapshot.activeSubject.name, snapshot.activeSubject.dataUrl) : null;
+      const nextBackdrop = snapshot.activeBackdrop
+        ? snapshot.activeBackdrop.r2Key
+          ? await r2KeyToBackdropAsset(snapshot.activeBackdrop.name, snapshot.activeBackdrop.r2Key)
+          : snapshot.activeBackdrop.dataUrl
+            ? await dataUrlToBackdropAsset(snapshot.activeBackdrop.name, snapshot.activeBackdrop.dataUrl)
+            : null
+        : null;
+      const nextSubject = snapshot.activeSubject
+        ? snapshot.activeSubject.r2Key
+          ? await r2KeyToAsset(snapshot.activeSubject.name, snapshot.activeSubject.r2Key)
+          : snapshot.activeSubject.dataUrl
+            ? await dataUrlToAsset(snapshot.activeSubject.name, snapshot.activeSubject.dataUrl)
+            : null
+        : null;
 
       for (const b of backdrops) { if (objectUrlsRef.current.has(b.objectUrl)) { URL.revokeObjectURL(b.objectUrl); objectUrlsRef.current.delete(b.objectUrl); } }
       for (const s of subjects) { if (objectUrlsRef.current.has(s.objectUrl)) { URL.revokeObjectURL(s.objectUrl); objectUrlsRef.current.delete(s.objectUrl); } }
 
-      if (nextBackdrop) { registerUrl(nextBackdrop.objectUrl); addBackdrop(nextBackdrop); setActiveBackdrop(nextBackdrop.id); }
-      if (nextSubject) { registerUrl(nextSubject.objectUrl); addSubjects([nextSubject]); setActiveSubject(nextSubject.id); }
+      if (nextBackdrop) registerUrl(nextBackdrop.objectUrl);
+      if (nextSubject) registerUrl(nextSubject.objectUrl);
 
-      setFirstName(snapshot.firstName); setLastName(snapshot.lastName);
-      setNameStyle(snapshot.nameStyle); setExportProfile(snapshot.exportProfile);
-      Object.keys(snapshot.composition).forEach(() => updateComposition(snapshot.composition));
+      replaceBackdrops(nextBackdrop ? [nextBackdrop] : []);
+      replaceSubjects(nextSubject ? [nextSubject] : []);
+      setActiveBackdrop(nextBackdrop?.id ?? null);
+      setActiveSubject(nextSubject?.id ?? null);
+
+      setFirstName(snapshot.firstName);
+      setLastName(snapshot.lastName);
+      setNameStyle(snapshot.nameStyle);
+      setExportProfile(snapshot.exportProfile);
+      updateComposition(snapshot.composition);
       clearBatch();
       setProjectName(payload.project?.name ?? 'Session');
       showToast('Project loaded.');

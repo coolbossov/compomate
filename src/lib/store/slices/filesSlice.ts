@@ -22,6 +22,12 @@ export const createFilesSlice: FilesSliceCreator = (set) => ({
       }
     }),
 
+  replaceSubjects: (assets: Asset[]) =>
+    set((draft) => {
+      draft.subjects = assets;
+      draft.activeSubjectId = assets[0]?.id ?? null;
+    }),
+
   removeSubject: (id: string) =>
     set((draft) => {
       const idx = draft.subjects.findIndex((s: Asset) => s.id === id);
@@ -32,6 +38,12 @@ export const createFilesSlice: FilesSliceCreator = (set) => ({
         draft.activeSubjectId =
           draft.subjects[idx]?.id ?? draft.subjects[idx - 1]?.id ?? null;
       }
+    }),
+
+  updateSubject: (id: string, patch: Partial<Asset>) =>
+    set((draft) => {
+      const subject = draft.subjects.find((s: Asset) => s.id === id);
+      if (subject) Object.assign(subject, patch);
     }),
 
   setActiveSubject: (id: string | null) =>

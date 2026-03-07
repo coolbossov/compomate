@@ -89,12 +89,6 @@ export const useExportCounter = () => useStore((s) => s.exportCounter);
 /** Whether the user has given approval after previewing the first export. */
 export const useApprovalGiven = () => useStore((s) => s.approvalGiven);
 
-/**
- * Derived summary of batch queue counts.
- * Calls the store's getQueueSummary() method — subscribes on any state change.
- */
-export const useQueueSummary = () => useStore((s) => s.getQueueSummary());
-
 // ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------

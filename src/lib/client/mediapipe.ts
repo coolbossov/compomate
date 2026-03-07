@@ -4,15 +4,14 @@ import { MEDIAPIPE_MODEL_URL, MEDIAPIPE_CONFIDENCE_THRESHOLD } from '@/lib/const
 
 // Lazy singleton — loads WASM model once
 let landmarkerPromise: Promise<unknown> | null = null;
+const MEDIAPIPE_WASM_PATH = '/vendor/mediapipe/wasm';
 
 async function getLandmarker(): Promise<unknown> {
   if (landmarkerPromise) return landmarkerPromise;
   landmarkerPromise = (async () => {
     try {
       const { PoseLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
-      const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm',
-      );
+      const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_PATH);
       return await PoseLandmarker.createFromOptions(vision, {
         baseOptions: { modelAssetPath: MEDIAPIPE_MODEL_URL, delegate: 'GPU' },
         runningMode: 'IMAGE',

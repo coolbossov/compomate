@@ -24,7 +24,7 @@ export function AppHeader() {
       </div>
       <div className="flex items-center gap-2">
         <div className="rounded-md border border-[color:var(--panel-border)] px-2 py-1 text-xs text-[var(--text-soft)]">
-          Phases 1-7 Build
+          Internal Tool
         </div>
         <button
           type="button"

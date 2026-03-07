@@ -23,7 +23,6 @@ import {
   useNameOverlayEnabled,
   useNameSizePct,
   useNameYFromBottomPct,
-  useQueueSummary,
 } from '@/lib/store/selectors';
 import {
   EXPORT_PROFILES,
@@ -64,6 +63,28 @@ async function toDataUrl(objectUrl: string): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+async function resolveExportSources(
+  subject: { objectUrl: string; r2Key?: string },
+  backdrop: { objectUrl: string; r2Key?: string },
+): Promise<{
+  subjectR2Key?: string;
+  subjectDataUrl?: string;
+  backdropR2Key?: string;
+  backdropDataUrl?: string;
+}> {
+  const [subjectDataUrl, backdropDataUrl] = await Promise.all([
+    subject.r2Key ? Promise.resolve(undefined) : toDataUrl(subject.objectUrl),
+    backdrop.r2Key ? Promise.resolve(undefined) : toDataUrl(backdrop.objectUrl),
+  ]);
+
+  return {
+    subjectR2Key: subject.r2Key,
+    subjectDataUrl,
+    backdropR2Key: backdrop.r2Key,
+    backdropDataUrl,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +162,6 @@ export function ExportPanel() {
   const nameOverlayEnabled = useNameOverlayEnabled();
   const nameSizePct = useNameSizePct();
   const nameYFromBottomPct = useNameYFromBottomPct();
-  const queueSummary = useQueueSummary();
 
   const backdrops = useStore((s) => s.backdrops);
   const subjects = useStore((s) => s.subjects);
@@ -172,6 +192,17 @@ export function ExportPanel() {
     lastName || 'Last',
     exportCounter + 1,
   );
+  const queueSummary = batchItems.reduce(
+    (summary, item) => {
+      if (item.status === 'done') summary.done += 1;
+      else if (item.status === 'running') summary.running += 1;
+      else if (item.status === 'pending') summary.pending += 1;
+      else if (item.status === 'failed') summary.failed += 1;
+      summary.total += 1;
+      return summary;
+    },
+    { done: 0, running: 0, pending: 0, failed: 0, total: 0 },
+  );
 
   // ---------------------------------------------------------------------------
   // Single export
@@ -181,18 +212,10 @@ export function ExportPanel() {
     if (!activeBackdrop || !activeSubject) return;
     setIsExporting(true);
     try {
-      const [subjectDataUrl, backdropDataUrl] = await Promise.all([
-        toDataUrl(activeSubject.objectUrl),
-        (activeBackdrop as { r2Key?: string }).r2Key
-          ? Promise.resolve(undefined)
-          : toDataUrl(activeBackdrop.objectUrl),
-      ]);
+      const exportSources = await resolveExportSources(activeSubject, activeBackdrop);
 
       const body = {
-        subjectR2Key: undefined,
-        subjectDataUrl,
-        backdropR2Key: (activeBackdrop as { r2Key?: string }).r2Key,
-        backdropDataUrl,
+        ...exportSources,
         composition,
         exportProfileId,
         nameOverlay: {
@@ -348,20 +371,12 @@ export function ExportPanel() {
         }
 
         try {
-          const [subjectDataUrl, backdropDataUrl] = await Promise.all([
-            toDataUrl(subject.objectUrl),
-            (backdrop as { r2Key?: string }).r2Key
-              ? Promise.resolve(undefined)
-              : toDataUrl(backdrop.objectUrl),
-          ]);
+          const exportSources = await resolveExportSources(subject, backdrop);
 
           batchIndex += 1;
 
           const body = {
-            subjectR2Key: undefined,
-            subjectDataUrl,
-            backdropR2Key: (backdrop as { r2Key?: string }).r2Key,
-            backdropDataUrl,
+            ...exportSources,
             composition: item.composition,
             exportProfileId: item.exportProfile,
             nameOverlay: {

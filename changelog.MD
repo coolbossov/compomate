@@ -8,6 +8,24 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 5B
+
+#### Batch 5B — Analytics + UI polish
+**Commit:** `feat: Sentry + PostHog + Vercel Analytics, per-section reset buttons, next/image, Inter font`
+- `sentry.client.config.ts` — Sentry browser init with replays (session 0%, error 50%)
+- `sentry.server.config.ts` — Sentry server init (tracesSampleRate 0.1)
+- `sentry.edge.config.ts` — Sentry edge init
+- `next.config.ts`: `withSentryConfig` wrapper; PostHog reverse proxy rewrites (`/ingest/*`); `images.formats` (avif/webp) + `remotePatterns` for fal.media, fal.run, r2.cloudflarestorage, storage.googleapis.com
+- `src/lib/client/posthog.ts` (new): lazy-init PostHog with `capture_pageview: false`, `capture_pageleave: true`
+- `src/components/analytics/PostHogProvider.tsx` (new): `'use client'` wrapper — inits PostHog on mount, captures `$pageview` on pathname change
+- `src/app/layout.tsx`: Added `Analytics` + `SpeedInsights` (Vercel), `PostHogProvider`, `Inter` font (CSS var `--font-inter`), preconnect hints for `vitals.vercel-insights.com` + `us.i.posthog.com`
+- `src/components/panels/ControlPanel.tsx`: `RotateCcw` (lucide) reset buttons on all 5 sections — Placement (xPct, yPct, subjectHeightPct), Shadow (all 5 shadow fields), Reflection (all 4 reflection fields + enabled), Blend Helpers (legFade + fog fields), Name Overlay (nameSizePct + nameYFromBottomPct via store setters)
+- `src/components/workspace/EmptyState.tsx`: Upgraded with `ImagePlus` / `Users` icons (lucide), two-line copy, pulsing icon animation, brand-colored border
+- `.env.local` + `.env.example`: Added Sentry + PostHog placeholder vars
+- Build: ✓ 0 TypeScript errors, 12 routes
+
+---
+
 ### Session: 2026-03-07 — Claude (claude-sonnet-4-6) — Batch 5A
 
 #### Batch 5A — Backdrop library, templates, session management
@@ -32,6 +50,31 @@
 ---
 
 ### Session: 2026-03-07 — Codex (GPT-5)
+
+#### Batch 5 persistence hardening — export race fix + snapshot references
+- `src/app/api/export/route.ts` — removed the R2 upload race: exports now upload synchronously before returning a presigned download URL, and if R2 upload fails the route falls back to an inline data URL instead of returning a broken link.
+- `src/lib/shared/project-snapshot.ts` and `src/lib/constants.ts` — introduced snapshot version `2` with backward-compatible validation for both v1 and v2 payloads; serialized assets can now store either inline `dataUrl` content or an `r2Key`.
+- `src/components/panels/BackdropPanel.tsx` — upgraded project save/load to prefer `r2Key` references when assets are already in storage, fall back to inline data only when needed, replace the current subject/backdrop libraries instead of appending duplicates, and apply composition state once instead of redundantly replaying the same patch in a loop.
+- `src/lib/client/utils.ts` and `src/app/api/r2/download/route.ts` — added the client/server path for loading previously stored R2-backed assets into the editor by resolving a presigned read URL, downloading the blob, and rebuilding local editor assets with the original `r2Key` preserved.
+- `src/lib/store/types.ts`, `src/lib/store/slices/filesSlice.ts`, and `src/lib/store/slices/backdropSlice.ts` — added `replaceSubjects()` and `replaceBackdrops()` so project loads can cleanly reset asset libraries instead of layering restored files on top of the previous session.
+- Review gate after this chunk: `npm run lint` passed, `npm run build` passed, focused diff inspection confirmed the export/persistence changes only, stub/dead-code scan on touched files returned clean, and `npm audit --omit=dev` reported 0 vulnerabilities.
+
+#### Batch 5 asset pipeline completion — subject R2 upload + export source cleanup
+- `src/components/panels/FilePanel.tsx` — completed subject-side background uploads to Cloudflare R2 after local file import so the app now treats subject assets the same way as backdrop assets: local editing stays immediate, while export can reuse uploaded originals when available.
+- `src/lib/store/types.ts`, `src/lib/store/slices/filesSlice.ts`, and `src/types/files.ts` — added `updateSubject()` plus optional `r2Key` support on `Asset` so asynchronously uploaded subjects can be patched into store state without re-adding or reordering files.
+- `src/components/panels/ExportPanel.tsx` — added a shared export-source resolver so export and batch export now prefer `subjectR2Key` / `backdropR2Key` and only fall back to data URLs when an asset has not finished uploading yet.
+- `src/lib/shared/composition.ts` — corrected export profile descriptions to match the current product behavior: the app exports from the 4:5 master canvas and uses crop guides as framing aids, not true alternate-raster print exports.
+- `src/components/layout/AppHeader.tsx` — replaced the stale `Phases 1-7 Build` badge with `Internal Tool` so the shell copy matches the clarified project role.
+- Review gate after this chunk: `npm run lint` passed, `npm run build` passed, focused diff inspection matched the intended asset/export files, stub/dead-code scan on touched files returned clean, and `npm audit --omit=dev` reported 0 vulnerabilities.
+
+#### Batch 5 workflow integration — templates + session management hardening
+- Confirmed the new Phase 5 UI pieces were already wired into the page: `TemplatesPanel` is in the right rail and `SessionResumeDialog` is mounted near the app shell.
+- Fixed the session metadata design so it no longer collides with Zustand persist storage: added `SESSION_RESUME_STORAGE_KEY` and moved `src/lib/client/sessionStorage.ts` onto that dedicated key.
+- `src/components/layout/SessionResumeDialog.tsx` — upgraded the dialog from a dead prompt into an actual session-control layer:
+  it now saves lightweight session metadata on relevant workspace changes, explains that workspace settings were already auto-restored, supports `Start fresh` by clearing persisted store state and reloading, and reapplies saved export/name/font/lock settings on `Resume`.
+- `src/app/api/templates/route.ts` and `src/app/api/templates/[id]/route.ts` — added per-IP rate limiting and production-safe session cookies (`secure` in production) so the templates API is closer to the same hardening standard as the other routes.
+- `supabase/migrations/20260307_create_compomate_templates.sql` — hardened the templates schema with `pgcrypto`, explicit `public.` schema usage, a compound session/update index, and RLS enabled on the table.
+- Review gate after this chunk: `npm run lint` passed, `npm run build` passed, focused diff inspection stayed limited to the templates/session files, stub/dead-code scan returned clean on the touched files, and `npm audit --omit=dev` reported 0 vulnerabilities.
 
 #### Batch 4 stabilization gate
 - Fixed the new Konva canvas path so the branch returned to a clean `npm run lint` and `npm run build` baseline.

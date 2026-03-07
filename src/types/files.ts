@@ -5,6 +5,7 @@ export interface Asset {
   name: string;
   file: File;
   objectUrl: string;
+  r2Key?: string;
   width: number;
   height: number;
 }

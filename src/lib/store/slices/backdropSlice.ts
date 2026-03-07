@@ -30,6 +30,12 @@ export const createBackdropSlice: BackdropSliceCreator = (set) => ({
       }
     }),
 
+  replaceBackdrops: (assets: BackdropAsset[]) =>
+    set((draft) => {
+      draft.backdrops = assets;
+      draft.activeBackdropId = assets[0]?.id ?? null;
+    }),
+
   removeBackdrop: (id: string) =>
     set((draft) => {
       const idx = draft.backdrops.findIndex((b: BackdropAsset) => b.id === id);

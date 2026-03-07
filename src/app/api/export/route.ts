@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
-import { waitUntil } from "@vercel/functions";
 import { runCompositorPipeline } from "@/lib/compositing/pipeline";
 import {
   getPresignedDownloadUrl,
@@ -139,28 +138,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (r2Env) {
       const exportKey = generateExportKey(filename);
 
-      // Generate presigned PUT URL, then upload via waitUntil (non-blocking)
-      const putUrl = await getPresignedUploadUrl(exportKey, "image/png");
-      const uploadBuffer = result.buffer;
-
-      waitUntil(
-        fetch(putUrl, {
+      try {
+        const putUrl = await getPresignedUploadUrl(exportKey, "image/png");
+        const uploadResponse = await fetch(putUrl, {
           method: "PUT",
-          body: new Uint8Array(uploadBuffer),
+          body: new Uint8Array(result.buffer),
           headers: { "Content-Type": "image/png" },
-        }).catch((err: unknown) => {
-          console.error("[export] R2 upload failed:", err);
-        }),
-      );
+        });
 
-      const downloadUrl = await getPresignedDownloadUrl(exportKey);
+        if (!uploadResponse.ok) {
+          throw new Error(`R2 upload failed (${uploadResponse.status}).`);
+        }
 
-      return NextResponse.json({
-        filename,
-        downloadUrl,
-        width: EXPORT_WIDTH_PX,
-        height: EXPORT_HEIGHT_PX,
-      });
+        const downloadUrl = await getPresignedDownloadUrl(exportKey);
+
+        return NextResponse.json({
+          filename,
+          downloadUrl,
+          width: EXPORT_WIDTH_PX,
+          height: EXPORT_HEIGHT_PX,
+        });
+      } catch (error) {
+        console.error("[export] R2 upload failed, falling back to inline download:", error);
+      }
     }
 
     // No R2 — return inline base64 data URL

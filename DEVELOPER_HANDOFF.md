@@ -1,5 +1,9 @@
 # CompoMate Developer Handoff
 
+> Historical note: this document captures an earlier stabilization pass.
+> The current canonical repo status is tracked in `changelog.MD` and `README.md`.
+> Several sections below predate the later template/session/R2/browser-hardening work.
+
 This document is a continuation handoff for another developer or AI coding agent.
 It explains what was changed in this pass, why those changes were made, how the current logic works, how to test it, and what remains open.
 

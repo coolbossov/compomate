@@ -1,4 +1,4 @@
-import { SESSION_STORAGE_KEY } from '@/lib/constants';
+import { SESSION_RESUME_STORAGE_KEY } from '@/lib/constants';
 import type { SessionSettings } from '@/types/session';
 
 /**
@@ -7,7 +7,7 @@ import type { SessionSettings } from '@/types/session';
  */
 export function saveSession(settings: SessionSettings): void {
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(SESSION_RESUME_STORAGE_KEY, JSON.stringify(settings));
   } catch {
     // Ignore — private browsing or quota exceeded
   }
@@ -19,7 +19,7 @@ export function saveSession(settings: SessionSettings): void {
  */
 export function loadSession(): SessionSettings | null {
   try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    const raw = localStorage.getItem(SESSION_RESUME_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as SessionSettings) : null;
   } catch {
     return null;
@@ -31,7 +31,7 @@ export function loadSession(): SessionSettings | null {
  */
 export function clearSession(): void {
   try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(SESSION_RESUME_STORAGE_KEY);
   } catch {
     // Ignore
   }

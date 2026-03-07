@@ -66,7 +66,7 @@ export const EXPORT_PROFILES: Record<ExportProfileId, ExportProfile> = {
     widthPx: null,
     heightPx: null,
     aspectRatio: null,
-    description: "Keep backdrop dimensions and aspect ratio.",
+    description: "Use the full 4:5 master canvas with no crop guide.",
   },
   "8x10": {
     id: "8x10",
@@ -76,7 +76,7 @@ export const EXPORT_PROFILES: Record<ExportProfileId, ExportProfile> = {
     widthPx: 2400,
     heightPx: 3000,
     aspectRatio: 8 / 10,
-    description: "Portrait print profile at 300 DPI.",
+    description: "Show the 8x10 crop guide inside the 4:5 master export.",
   },
   "5x7": {
     id: "5x7",
@@ -86,7 +86,7 @@ export const EXPORT_PROFILES: Record<ExportProfileId, ExportProfile> = {
     widthPx: 1500,
     heightPx: 2100,
     aspectRatio: 5 / 7,
-    description: "Portrait print profile at 300 DPI.",
+    description: "Show the 5x7 crop guide inside the 4:5 master export.",
   },
   "4x5": {
     id: "4x5",
@@ -96,7 +96,7 @@ export const EXPORT_PROFILES: Record<ExportProfileId, ExportProfile> = {
     widthPx: 1200,
     heightPx: 1500,
     aspectRatio: 4 / 5,
-    description: "Portrait print profile at 300 DPI.",
+    description: "Use the native 4:5 master export framing.",
   },
   "1x1": {
     id: "1x1",
@@ -106,7 +106,7 @@ export const EXPORT_PROFILES: Record<ExportProfileId, ExportProfile> = {
     widthPx: 2400,
     heightPx: 2400,
     aspectRatio: 1,
-    description: "Square profile at 300 DPI.",
+    description: "Show the 1x1 crop guide inside the 4:5 master export.",
   },
 };
 

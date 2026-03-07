@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdminClient, isSupabaseConfigured } from "@/lib/server/supabase-admin";
 import { DB_TABLES } from "@/lib/constants";
+import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -20,6 +21,15 @@ type RouteContext = { params: Promise<{ id: string }> };
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const ip = requestIp(request.headers);
+  const limit = checkRateLimit(`templates:get:${ip}`, 80, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many template requests. Please wait and retry." },
+      { status: 429 },
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
@@ -56,6 +66,15 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
 // ---------------------------------------------------------------------------
 
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const ip = requestIp(request.headers);
+  const limit = checkRateLimit(`templates:delete:${ip}`, 30, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many template delete attempts. Please wait and retry." },
+      { status: 429 },
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }

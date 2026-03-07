@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import {
   useComposition,
@@ -8,7 +9,8 @@ import {
   useActiveBackdrop,
 } from '@/lib/store/selectors';
 import { analyzeSubjectPose, detectBackdropLightDirection, type PoseAnalysis } from '@/lib/client/utils';
-import { clamp } from '@/lib/shared/composition';
+import { clamp, INITIAL_COMPOSITION } from '@/lib/shared/composition';
+import { NAME_OVERLAY_DEFAULTS } from '@/lib/constants';
 
 // ---------------------------------------------------------------------------
 // Inline mini-components (scoped to this panel)
@@ -75,6 +77,28 @@ function ToggleControl({
   );
 }
 
+function SectionHeader({
+  title,
+  onReset,
+}: {
+  title: string;
+  onReset: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-1">
+      <h2 className="panel-title">{title}</h2>
+      <button
+        type="button"
+        onClick={onReset}
+        className="p-1 rounded hover:bg-[#2A2A38] text-[#6367FF] opacity-60 hover:opacity-100 transition-opacity"
+        title="Reset to defaults"
+      >
+        <RotateCcw size={12} />
+      </button>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ControlPanel
 // ---------------------------------------------------------------------------
@@ -86,6 +110,8 @@ export function ControlPanel() {
 
   const updateComposition = useStore((s) => s.updateComposition);
   const applyBlendPreset = useStore((s) => s.applyBlendPreset);
+  const setNameSizePct = useStore((s) => s.setNameSizePct);
+  const setNameYFromBottomPct = useStore((s) => s.setNameYFromBottomPct);
 
   const [isAutoTuning, setIsAutoTuning] = useState(false);
   const [poseAnalysis, setPoseAnalysis] = useState<PoseAnalysis | null>(null);
@@ -171,7 +197,14 @@ export function ControlPanel() {
 
       {/* Placement */}
       <section className="space-y-3">
-        <h2 className="panel-title">Placement</h2>
+        <SectionHeader
+          title="Placement"
+          onReset={() => updateComposition({
+            xPct: INITIAL_COMPOSITION.xPct,
+            yPct: INITIAL_COMPOSITION.yPct,
+            subjectHeightPct: INITIAL_COMPOSITION.subjectHeightPct,
+          })}
+        />
         <SliderControl label="X position" value={composition.xPct} min={5} max={95} step={1} suffix="%" onChange={(v) => updateComposition({ xPct: v })} />
         <SliderControl label="Y baseline" value={composition.yPct} min={25} max={96} step={1} suffix="%" onChange={(v) => updateComposition({ yPct: v })} />
         <SliderControl label="Subject height" value={composition.subjectHeightPct} min={20} max={95} step={1} suffix="%" onChange={(v) => updateComposition({ subjectHeightPct: v })} />
@@ -179,7 +212,17 @@ export function ControlPanel() {
 
       {/* Shadow */}
       <section className="space-y-3">
-        <h2 className="panel-title">Shadow</h2>
+        <SectionHeader
+          title="Shadow"
+          onReset={() => updateComposition({
+            shadowEnabled: INITIAL_COMPOSITION.shadowEnabled,
+            shadowStrengthPct: INITIAL_COMPOSITION.shadowStrengthPct,
+            lightDirectionDeg: INITIAL_COMPOSITION.lightDirectionDeg,
+            lightElevationDeg: INITIAL_COMPOSITION.lightElevationDeg,
+            shadowStretchPct: INITIAL_COMPOSITION.shadowStretchPct,
+            shadowBlurPx: INITIAL_COMPOSITION.shadowBlurPx,
+          })}
+        />
         <ToggleControl label="Enable shadow" checked={composition.shadowEnabled} onChange={(v) => updateComposition({ shadowEnabled: v })} />
         {composition.shadowEnabled ? (
           <>
@@ -196,7 +239,16 @@ export function ControlPanel() {
 
       {/* Reflection */}
       <section className="space-y-3">
-        <h2 className="panel-title">Reflection</h2>
+        <SectionHeader
+          title="Reflection"
+          onReset={() => updateComposition({
+            reflectionEnabled: INITIAL_COMPOSITION.reflectionEnabled,
+            reflectionSizePct: INITIAL_COMPOSITION.reflectionSizePct,
+            reflectionPositionPct: INITIAL_COMPOSITION.reflectionPositionPct,
+            reflectionOpacityPct: INITIAL_COMPOSITION.reflectionOpacityPct,
+            reflectionBlurPx: INITIAL_COMPOSITION.reflectionBlurPx,
+          })}
+        />
         <ToggleControl label="Enable reflection" checked={composition.reflectionEnabled} onChange={(v) => updateComposition({ reflectionEnabled: v })} />
         {composition.reflectionEnabled ? (
           <>
@@ -212,7 +264,16 @@ export function ControlPanel() {
 
       {/* Blend Helpers */}
       <section className="space-y-3">
-        <h2 className="panel-title">Blend Helpers</h2>
+        <SectionHeader
+          title="Blend Helpers"
+          onReset={() => updateComposition({
+            legFadeEnabled: INITIAL_COMPOSITION.legFadeEnabled,
+            legFadeStartPct: INITIAL_COMPOSITION.legFadeStartPct,
+            fogEnabled: INITIAL_COMPOSITION.fogEnabled,
+            fogOpacityPct: INITIAL_COMPOSITION.fogOpacityPct,
+            fogHeightPct: INITIAL_COMPOSITION.fogHeightPct,
+          })}
+        />
         <ToggleControl label="Leg gradient fade" checked={composition.legFadeEnabled} onChange={(v) => updateComposition({ legFadeEnabled: v })} />
         {composition.legFadeEnabled && (
           <SliderControl label="Fade start" value={composition.legFadeStartPct} min={45} max={95} step={1} suffix="%" onChange={(v) => updateComposition({ legFadeStartPct: v })} />
@@ -224,6 +285,18 @@ export function ControlPanel() {
             <SliderControl label="Fog height" value={composition.fogHeightPct} min={8} max={60} step={1} suffix="%" onChange={(v) => updateComposition({ fogHeightPct: v })} />
           </>
         )}
+      </section>
+
+      {/* Name Overlay */}
+      <section className="space-y-3">
+        <SectionHeader
+          title="Name Overlay"
+          onReset={() => {
+            setNameSizePct(NAME_OVERLAY_DEFAULTS.sizePct);
+            setNameYFromBottomPct(NAME_OVERLAY_DEFAULTS.yFromBottomPct);
+          }}
+        />
+        <p className="text-xs text-[var(--text-soft)]">Configure name overlay in the Name panel on the left.</p>
       </section>
     </div>
   );
