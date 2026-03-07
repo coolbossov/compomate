@@ -9,10 +9,6 @@ import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const isVercelRuntime =
-  process.env.VERCEL === "1" ||
-  process.env.VERCEL === "true" ||
-  Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV);
 
 export const metadata: Metadata = {
   title: "CompoMate",
@@ -28,17 +24,15 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans", geist.variable, inter.variable)}>
       <head>
         <link rel="preconnect" href="https://us.i.posthog.com" />
-        {isVercelRuntime ? (
-          <link rel="preconnect" href="https://vitals.vercel-insights.com" />
-        ) : null}
+        <link rel="preconnect" href="https://vitals.vercel-insights.com" />
       </head>
       <body className="antialiased">
         <PostHogProvider>
           {children}
         </PostHogProvider>
         <Toaster />
-        {isVercelRuntime ? <Analytics /> : null}
-        {isVercelRuntime ? <SpeedInsights /> : null}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
