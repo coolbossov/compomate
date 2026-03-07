@@ -1,10 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { useSubjects } from '@/lib/store/selectors';
 import { filesToAssets, collectImageFiles, isImageFile } from '@/lib/client/utils';
+import { computeAutoPlacement } from '@/lib/client/autoPlacement';
 
 export function FilePanel() {
   const subjects = useSubjects();
@@ -13,8 +14,19 @@ export function FilePanel() {
   const removeSubject = useStore((s) => s.removeSubject);
   const setActiveSubject = useStore((s) => s.setActiveSubject);
   const showToast = useStore((s) => s.showToast);
+  const updateComposition = useStore((s) => s.updateComposition);
 
   const objectUrlsRef = useRef(new Set<string>());
+
+  // Auto-placement — run whenever the active subject changes
+  useEffect(() => {
+    if (!activeSubjectId) return;
+    const subject = subjects.find((s) => s.id === activeSubjectId);
+    if (subject) {
+      void computeAutoPlacement(subject).then((patch) => updateComposition(patch));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubjectId]);
 
   function registerUrls(urls: string[]) {
     for (const url of urls) objectUrlsRef.current.add(url);

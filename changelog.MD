@@ -8,6 +8,25 @@
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
 
+### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 4A Export Pipeline
+
+#### Batch 4A — Export pipeline upgrade
+**Commit:** `feat: export pipeline — maxDuration=300, R2 I/O, 4000x5000 output, queue UI, approval gate`
+- Rewrote api/export/route.ts (731→~150 lines) using runCompositorPipeline
+- maxDuration=300 (Vercel Fluid Compute), waitUntil for non-blocking R2 upload
+- JSON body (not FormData) — R2 keys preferred, data URL fallback
+- Always 4000×5000 output at 300 DPI
+- File naming: [Job]-[First]-[Last]-[0001].png from buildExportFilename()
+- Queue summary bar (✓/●/○/✗ counts), per-item status icons
+- Export toast (sonner, 4s), approval gate dialog after first export
+- Lock settings toggle (shadcn Switch + lucide Lock/Unlock icon)
+- File naming live preview in export settings
+- Keyboard shortcut Cmd+E wired via compomate:export custom event
+- Installed @vercel/functions for waitUntil
+- Added `<Toaster />` to root layout (src/app/layout.tsx)
+
+---
+
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 4C
 
 #### Batch 4C — Keyboard shortcuts + name entry UX
