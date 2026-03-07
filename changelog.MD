@@ -1,12 +1,36 @@
-# CompoMate — AI Agent Changelog
+# CompoMate — Agent Work Log
 
-> This file is maintained by AI agents (Claude, Codex, etc.) to track all changes made to the codebase.
-> Every agent that modifies the repo must update this file before committing.
+> This file is the persistent root changelog for this repo.
+> Update it for every important investigation, code change, and commit.
 > Format: newest entries at the top.
 
 ---
 
 ## [Unreleased] — Branch: `feature/compomate-full-implementation`
+
+### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 4C
+
+#### Batch 4C — Keyboard shortcuts + name entry UX
+**Commit:** `feat: keyboard shortcuts hook, paste auto-split, sticky last name, tab-flow, font preview`
+- `src/lib/client/useKeyboardShortcuts.ts` — global keydown hook: ← → file navigation, Cmd+Z undo, Cmd+Shift+Z redo, Cmd+E export, Cmd+S template, ? overlay; uses exported `undo`/`redo` imperatives from store (avoids useCallback anti-pattern)
+- `src/components/layout/KeyboardShortcutsProvider.tsx` — thin `'use client'` wrapper that calls the hook; wraps page content in page.tsx
+- `src/app/page.tsx` — wrapped root content with `<KeyboardShortcutsProvider>`
+- `src/components/layout/ShortcutsOverlay.tsx` — upgraded to shadcn Dialog (base-ui); controlled via `open={showShortcuts}` + `onOpenChange`; renders SHORTCUTS array in a CSS Grid two-column layout (description | kbd badges); maps arrow keys to `←→↑↓` and modifiers to `⌘⇧⌥`
+- `src/components/panels/NameEntryPanel.tsx` — clipboard paste auto-split (space detection, calls `pasteAutoSplit`); tab-flow refs (`firstNameRef`/`lastNameRef`) — Tab on lastName advances to next subject; sticky last name upgraded from checkbox to shadcn Switch with Pin icon and `title` tooltip; lastName input gets `border-[#6367FF]` when sticky; `clearForNextFile` effect on `activeSubjectId` change (skips initial load); font preview div using FontFace API loads pair fonts and renders first/last name live; font pair selector (Classic/Modern buttons) calls `setFontPair`; name overlay toggle converted to Switch
+- `tsconfig.json` — bumped target from `ES2017` → `ES2018` (pre-existing: `/s` dotAll regex flag in `api/export/route.ts` required ES2018)
+- `src/app/api/export/route.ts` — pre-existing fix: `Buffer` → `new Uint8Array(buffer)` for fetch `body` (BodyInit compat with updated lib types)
+- `src/components/workspace/KonvaCanvas.tsx` — created stub component (pre-existing missing file referenced by Canvas.tsx); accepts `containerWidth`/`containerHeight` props; renders placeholder until Konva stage is implemented
+- Build: 0 TypeScript errors, 9 routes generated successfully
+
+### Session: 2026-03-07 — Codex (GPT-5)
+
+#### Repository alignment + changelog policy
+- Restored the root changelog as `changelog.MD` after a failed case-only rename attempt removed the tracked `CHANGELOG.md` on this filesystem.
+- Normalized the git-tracked path to `changelog.MD` with a two-step rename so future commits preserve the requested casing.
+- Reconfirmed that this repository is `compomate`, not `portal-slideshow`.
+- Reviewed `README.md`, `BACKLOG.md`, `DEVELOPER_HANDOFF.md`, `package.json`, recent git history, `src/app/page.tsx`, `src/components/workspace/Canvas.tsx`, and the main API routes under `src/app/api/`.
+- Current repo role from the implemented code: a Next.js portrait compositing tool for dance/gymnastics style production workflows, including subject placement, backdrop management, fal.ai backdrop generation, cloud export, batch export, and optional Supabase project snapshots.
+- Open clarification requested from the user: whether the pasted `portal-slideshow` v2.0 specification is only business context or an intended integration target for `compomate`.
 
 ### Session: 2026-03-06 — Claude (claude-sonnet-4-6) — Batch 3 Component Extraction
 
@@ -20,7 +44,7 @@
 - Created `src/components/layout/AppHeader.tsx` — reads `jobName` from store, job name input, `?` shortcuts button
 - Created `src/components/layout/ShortcutsOverlay.tsx` — maps `SHORTCUTS` array, closes on backdrop click
 - Created `src/components/workspace/EmptyState.tsx` — typed `no-backdrop | no-subject | ready` states
-- Created `src/components/workspace/DangerZoneOverlay.tsx` — 4×6 (red) and 5×7 (orange) crop zone overlays from `CROP_ZONES` constant
+- Created `src/components/workspace/DangerZoneOverlay.tsx` — 4x6 (red) and 5x7 (orange) crop zone overlays from `CROP_ZONES` constant
 - Created `src/components/workspace/Canvas.tsx` — full canvas with backdrop letterboxing, drag (pointer events preserved exactly), shadow ellipse, reflection image, leg fade mask, floor fog, name overlay SVG, safe area box; all state from Zustand store; local state: `canvasSize`
 - Created `src/components/panels/FilePanel.tsx` — subjects list, Add Files/Add Folder, thumbnails, remove; local `objectUrlsRef` for cleanup
 - Created `src/components/panels/BackdropPanel.tsx` — backdrops list, upload, FAL AI generation with polling, Projects (Supabase) save/load/refresh; store for backdrop state, local state for generation UI and Supabase UI
