@@ -32,6 +32,8 @@ export const maxDuration = 300;
 
 // Module-level cache — valid within a warm Vercel instance
 const backdropCache = new Map<string, Buffer>();
+const BACKDROP_CACHE_MAX = 20;
+const backdropCacheOrder: string[] = [];
 const MANAGED_R2_PREFIXES = ["subjects/", "backdrops/", "exports/"] as const;
 
 // ---------------------------------------------------------------------------
@@ -69,6 +71,18 @@ function dataUrlToBuffer(dataUrl: string): Buffer {
   const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/s);
   if (!match) throw new Error("Invalid data URL format.");
   return Buffer.from(match[2].replace(/\s/g, ""), "base64");
+}
+
+function cacheSet(key: string, data: Buffer): void {
+  if (backdropCache.has(key)) return;
+  if (backdropCacheOrder.length >= BACKDROP_CACHE_MAX) {
+    const oldestKey = backdropCacheOrder.shift();
+    if (oldestKey) {
+      backdropCache.delete(oldestKey);
+    }
+  }
+  backdropCacheOrder.push(key);
+  backdropCache.set(key, data);
 }
 
 async function resolveImageBuffer(
@@ -159,7 +173,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const backdropBuffer = resolvedBackdropBuffer;
     if (backdropCacheKey && cachedBackdrop === undefined) {
-      backdropCache.set(backdropCacheKey, backdropBuffer);
+      cacheSet(backdropCacheKey, backdropBuffer);
     }
 
     // ── Build name overlay config ────────────────────────────────────────────

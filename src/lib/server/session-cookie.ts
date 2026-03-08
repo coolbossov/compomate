@@ -5,8 +5,12 @@ export const SESSION_COOKIE_NAME = "compomate-session-id";
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 export async function getSessionIdFromCookie(): Promise<string | null> {
-  const cookieStore = await cookies();
-  return cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
+  try {
+    const cookieStore = await cookies();
+    return cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getOrCreateSessionId(): Promise<{ sessionId: string; isNew: boolean }> {

@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { useBackdrops, useGeneration } from '@/lib/store/selectors';
 import {
@@ -97,6 +97,11 @@ export function BackdropPanel() {
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null);
   const [projectPersistenceReason, setProjectPersistenceReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ----- Store selectors for snapshot -----
   const firstName = useStore((s) => s.firstName);

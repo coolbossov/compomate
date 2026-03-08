@@ -9,10 +9,12 @@ vi.mock("@/lib/server/supabase-admin", () => ({
   getSupabaseAdminClient: vi.fn().mockReturnValue({
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({
-            data: [{ id: "p1", name: "Project 1", created_at: "2025-01-01", updated_at: "2025-01-01" }],
-            error: null,
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({
+              data: [{ id: "p1", name: "Project 1", created_at: "2025-01-01", updated_at: "2025-01-01" }],
+              error: null,
+            }),
           }),
         }),
       }),
@@ -124,8 +126,10 @@ function buildMockClient(overrides?: {
   return {
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: limitMock,
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: limitMock,
+          }),
         }),
       }),
       insert: vi.fn().mockReturnValue({

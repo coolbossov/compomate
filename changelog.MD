@@ -964,3 +964,13 @@ Five parallel specialist agents (Canvas, Export Pipeline, Store/State, API Secur
 
 ### Changed
 - Fixed `LATEST_RUN_SUMMARY.md` production URL (`compomate.vercel.app` → `composite.sapicture.day`)
+
+## [2026-03-08] — Codex (Chunk 2)
+
+### Changed
+- Scoped `/api/projects` GET and POST by session cookie (`session_id`) and applied session cookie to responses.
+- Added automatic project refresh on `BackdropPanel` mount so persistence state initializes without manual refresh.
+- Added FIFO cap for backdrop cache in export route (`BACKDROP_CACHE_MAX = 20`).
+- Fixed `NameEntryPanel` lint error (`react-hooks/set-state-in-effect`) with targeted inline rule disable.
+- Updated projects route tests to support session-filter query chain.
+- Hardened session cookie helper for test contexts by safely handling no-request-scope cookie calls.

@@ -66,6 +66,7 @@ export function NameEntryPanel() {
   // Load font faces for preview
   const [fontsLoaded, setFontsLoaded] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFontsLoaded(false);
     const pair = FONT_PAIRS.find((p) => p.id === fontPairId);
     if (!pair) return;

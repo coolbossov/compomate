@@ -4,6 +4,7 @@ import {
 } from "@/lib/server/supabase-admin";
 import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
 import { isProjectSnapshot, type ProjectSnapshot } from "@/lib/shared/project-snapshot";
 
 export const runtime = "nodejs";
@@ -27,33 +28,48 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const sessionState = await getOrCreateSessionId();
+  const withSessionCookie = (response: NextResponse): NextResponse => {
+    applySessionCookie(response, sessionState.sessionId, sessionState.isNew);
+    return response;
+  };
+
   const persistence = getProjectPersistenceStatus();
   if (!persistence.available) {
-    return NextResponse.json(
+    return withSessionCookie(NextResponse.json(
       { projects: [], configured: false, available: false, reason: persistence.reason },
       { status: 200 },
-    );
+    ));
   }
 
   const client = getSupabaseAdminClient();
   if (!client) {
-    return NextResponse.json({ error: "Supabase client unavailable." }, { status: 503 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Supabase client unavailable." }, { status: 503 }),
+    );
   }
 
-  // TODO: Add session_id column to compomate_projects table (migration needed)
-  // and filter here: .eq('session_id', sessionId) to scope results per-session.
-  // Until then, this returns the 25 most recent projects globally.
   const { data, error } = await client
     .from(TABLE)
     .select("id,name,created_at,updated_at")
+    .eq("session_id", sessionState.sessionId)
     .order("updated_at", { ascending: false })
     .limit(25);
 
   if (error) {
     console.error("[projects] Database error:", error.message);
-    return NextResponse.json({ error: "Failed to load projects." }, { status: 500 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Failed to load projects." }, { status: 500 }),
+    );
   }
-  return NextResponse.json({ projects: data ?? [] });
+  return withSessionCookie(
+    NextResponse.json({
+      projects: data ?? [],
+      configured: persistence.available,
+      available: true,
+      reason: persistence.reason,
+    }),
+  );
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -66,39 +82,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const sessionState = await getOrCreateSessionId();
+  const withSessionCookie = (response: NextResponse): NextResponse => {
+    applySessionCookie(response, sessionState.sessionId, sessionState.isNew);
+    return response;
+  };
+
   const persistence = getProjectPersistenceStatus();
   if (!persistence.available) {
-    return NextResponse.json(
+    return withSessionCookie(NextResponse.json(
       { error: persistence.reason ?? "Project persistence is unavailable." },
       { status: 503 },
-    );
+    ));
   }
 
   const client = getSupabaseAdminClient();
   if (!client) {
-    return NextResponse.json({ error: "Supabase client unavailable." }, { status: 503 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Supabase client unavailable." }, { status: 503 }),
+    );
   }
 
   let body: SaveProjectBody;
   try {
     body = (await request.json()) as SaveProjectBody;
   } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Invalid request body." }, { status: 400 }),
+    );
   }
   const name = (body.name ?? "").trim();
   if (!name) {
-    return NextResponse.json({ error: "Project name is required." }, { status: 400 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Project name is required." }, { status: 400 }),
+    );
   }
   if (!isProjectSnapshot(body.snapshot)) {
-    return NextResponse.json({ error: "Invalid project snapshot payload." }, { status: 400 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Invalid project snapshot payload." }, { status: 400 }),
+    );
   }
 
   const encoded = Buffer.from(JSON.stringify(body.snapshot), "utf8");
   if (encoded.byteLength > MAX_PAYLOAD_BYTES) {
-    return NextResponse.json(
+    return withSessionCookie(NextResponse.json(
       { error: "Project payload is too large to store. Use fewer/lower-resolution assets." },
       { status: 413 },
-    );
+    ));
   }
 
   const { data, error } = await client
@@ -106,14 +136,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .insert({
       name,
       payload: body.snapshot,
+      session_id: sessionState.sessionId,
     })
     .select("id,name,created_at,updated_at")
     .single();
 
   if (error) {
     console.error("[projects] Database error:", error.message);
-    return NextResponse.json({ error: "Failed to save project." }, { status: 500 });
+    return withSessionCookie(
+      NextResponse.json({ error: "Failed to save project." }, { status: 500 }),
+    );
   }
 
-  return NextResponse.json({ project: data }, { status: 201 });
+  return withSessionCookie(NextResponse.json({ project: data }, { status: 201 }));
 }
