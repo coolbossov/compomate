@@ -5,7 +5,7 @@ Repo: `compomate`
 Branch at completion: `main`
 Production deployment: `READY`
 
-- Stable URL: `https://compomate.vercel.app`
+- Stable URL: `https://composite.sapicture.day`
 - Project alias: `https://compomate-sapd.vercel.app`
 - Branch alias: `https://compomate-git-main-sapd.vercel.app`
 
@@ -25,7 +25,7 @@ Full production infrastructure wired for the first time:
 - **Cloudflare R2** bucket `compomate-uploads` confirmed existing
 - **Vercel** — all 8 env vars set across production + preview + development
 - **`infra.md`** (Obsidian KB) updated with full CompoMate project details
-- **Smoke test passed** — `https://compomate.vercel.app` confirmed fully loading with all UI panels
+- **Smoke test passed** — `https://composite.sapicture.day` confirmed fully loading with all UI panels
 
 ### Supabase details
 
@@ -76,7 +76,7 @@ Migrations applied:
 - `npx tsc --noEmit` — 0 errors
 - `npm run test` — 285 passed, 0 failed
 - `npm run build` — 0 errors
-- Production smoke test — `https://compomate.vercel.app` fully renders ✅
+- Production smoke test — `https://composite.sapicture.day` fully renders ✅
 
 ## What another developer or AI should do next
 

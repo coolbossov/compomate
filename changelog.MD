@@ -68,6 +68,21 @@ Implemented session-bound R2 ownership enforcement for presign/download/delete a
 - `npx supabase db push` → applied `20260309_create_compomate_r2_objects.sql`
 - `npx supabase migration list` → local and remote aligned through `20260309`
 
+### Live Production Verification
+- Latest production deployment: `dpl_3GzBm8eTofQjgTraxxthJSM1J4Fr` (commit `3cd11d4`) → `READY`
+- `https://compomate.vercel.app` → `200 OK`, app renders
+- Session A:
+  - `POST /api/r2/presign` → `200` (key issued)
+  - `GET /api/r2/download?key=<A>` → `200`
+- No cookie:
+  - `GET /api/r2/download?key=<A>` → `401`
+- Session B (different cookie jar) against Session A key:
+  - `GET /api/r2/download?key=<A>` → `403`
+  - `DELETE /api/r2/delete` with `key=<A>` → `403`
+  - `POST /api/export` with `subjectR2Key=<A>` → `403`
+
+Result: session-bound ownership enforcement is active in production for download/delete/export key access.
+
 ### Multi-Agent QA (post-change)
 - Correctness QA: no critical/high blockers for single-user internal use
 - Security QA: internal single-user use acceptable; public unauthenticated deployment still needs auth/distributed rate-limit hardening
@@ -942,3 +957,10 @@ Five parallel specialist agents (Canvas, Export Pipeline, Store/State, API Secur
 - Create R2 API token at Cloudflare Dashboard
 - Apply Supabase migration (`supabase db push`)
 - Deploy to Vercel (`vercel --prod` or auto-deploy on merge)
+
+---
+
+## [2026-03-08] — Codex
+
+### Changed
+- Fixed `LATEST_RUN_SUMMARY.md` production URL (`compomate.vercel.app` → `composite.sapicture.day`)
