@@ -6,6 +6,7 @@ export interface Asset {
   file: File;
   objectUrl: string;
   r2Key?: string;
+  exported?: boolean;
   width: number;
   height: number;
 }

@@ -176,6 +176,7 @@ export function ExportPanel() {
   const setApprovalGiven = useStore((s) => s.setApprovalGiven);
   const incrementExportCounter = useStore((s) => s.incrementExportCounter);
   const setLockSettings = useStore((s) => s.setLockSettings);
+  const markExported = useStore((s) => s.markExported);
 
   const [isExporting, setIsExporting] = useState(false);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
@@ -250,6 +251,7 @@ export function ExportPanel() {
       };
 
       incrementExportCounter();
+      markExported(activeSubject.id);
       toast(filename, { duration: EXPORT_TOAST_DURATION_MS });
 
       // Trigger download
@@ -284,6 +286,7 @@ export function ExportPanel() {
     exportCounter,
     approvalGiven,
     incrementExportCounter,
+    markExported,
     setApprovalDialogOpen,
   ]);
 
@@ -304,9 +307,10 @@ export function ExportPanel() {
     backdropName: string,
     subjectName: string,
   ): void {
+    const athleteName = `${firstName} ${lastName}`.trim();
     const item: BatchItem = {
       id: makeId(),
-      label: `${backdropName} + ${subjectName}`,
+      label: athleteName || `${backdropName} + ${subjectName}`,
       backdropId,
       subjectId,
       firstName,
@@ -315,6 +319,9 @@ export function ExportPanel() {
       exportProfile: exportProfileId,
       nameStyle: nameStyleId,
       fontPairId,
+      nameOverlayEnabled,
+      nameSizePct,
+      nameYFromBottomPct,
       status: 'pending',
     };
     addBatchItem(item);
@@ -382,9 +389,9 @@ export function ExportPanel() {
               lastName: item.lastName,
               style: item.nameStyle,
               fontPairId: item.fontPairId,
-              enabled: nameOverlayEnabled,
-              sizePct: nameSizePct,
-              yFromBottomPct: nameYFromBottomPct,
+              enabled: item.nameOverlayEnabled,
+              sizePct: item.nameSizePct,
+              yFromBottomPct: item.nameYFromBottomPct,
             },
             jobName: jobName || DEFAULT_JOB_NAME,
             firstName: item.firstName,
@@ -426,6 +433,7 @@ export function ExportPanel() {
           zip.file(filename, arrayBuffer);
           exportedCount += 1;
           incrementExportCounter();
+          markExported(item.subjectId);
           updateBatchItem(item.id, { status: 'done', exportedFilename: filename });
 
           // Approval gate after first batch export

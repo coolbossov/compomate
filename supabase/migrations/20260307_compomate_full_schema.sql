@@ -1,3 +1,4 @@
+-- NOTE: if this migration was already applied with session_token, run: ALTER TABLE compomate_templates RENAME COLUMN session_token TO session_id;
 -- CompoMate full schema migration
 -- Replaces legacy compomate_projects table approach with 4 purpose-built tables
 -- user_id is nullable on all tables (Phase 1 = anonymous, Phase 3 = auth)
@@ -20,7 +21,7 @@ CREATE TABLE IF NOT EXISTS compomate_sessions (
 -- Templates table
 CREATE TABLE IF NOT EXISTS compomate_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_token TEXT NOT NULL,
+  session_id TEXT NOT NULL,
   name TEXT NOT NULL,
   composition JSONB NOT NULL DEFAULT '{}',
   export_profile_id TEXT NOT NULL DEFAULT 'original',
@@ -60,7 +61,7 @@ CREATE TABLE IF NOT EXISTS compomate_usage_logs (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON compomate_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_templates_session ON compomate_templates(session_token);
+CREATE INDEX IF NOT EXISTS idx_templates_session ON compomate_templates(session_id);
 CREATE INDEX IF NOT EXISTS idx_backdrops_session ON compomate_backdrops(session_token);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_session ON compomate_usage_logs(session_token);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_created ON compomate_usage_logs(created_at DESC);

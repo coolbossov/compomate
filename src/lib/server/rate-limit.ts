@@ -3,6 +3,10 @@ type RateBucket = {
   resetAt: number;
 };
 
+// NOTE: This Map is in-process and NOT shared across Vercel serverless instances.
+// Under concurrent load, multiple instances each maintain independent counters,
+// making this rate limit ineffective at scale.
+// Upgrade path: replace with @upstash/ratelimit backed by Upstash Redis.
 const buckets = new Map<string, RateBucket>();
 
 function cleanup(now: number): void {

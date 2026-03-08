@@ -30,23 +30,38 @@ export function NameEntryPanel() {
   const setFontPair = useStore((s) => s.setFontPair);
   const nextSubject = useStore((s) => s.nextSubject);
   const clearForNextFile = useStore((s) => s.clearForNextFile);
+  const applyNextRosterEntry = useStore((s) => s.applyNextRosterEntry);
   const activeSubjectId = useStore((s) => s.activeSubjectId);
 
   // Refs for tab-flow between inputs
   const firstNameRef = useRef<HTMLInputElement>(null);
   const lastNameRef = useRef<HTMLInputElement>(null);
 
-  // Track subject changes and clear name fields (keeping lastName if sticky)
+  // F shortcut — focus first name field via custom event
+  useEffect(() => {
+    function handleFocusName() {
+      firstNameRef.current?.focus();
+    }
+    window.addEventListener('compomate:focus-name', handleFocusName);
+    return () => window.removeEventListener('compomate:focus-name', handleFocusName);
+  }, []);
+
+  // Track subject changes: clear name fields then apply the next roster entry (if any).
+  // clearForNextFile runs first (clears firstName, optionally lastName).
+  // applyNextRosterEntry runs immediately after and overwrites with the queued name — so
+  // roster pre-fill always wins over the cleared state. It's a no-op when the queue is empty.
+  // On the very first activation (prevSubjectIdRef === null) we skip the clear but still
+  // apply from the queue, which handles the "roster loaded before subjects" case.
   const prevSubjectIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeSubjectId && activeSubjectId !== prevSubjectIdRef.current) {
-      // Only clear when navigating away from an already-loaded file (not initial load)
       if (prevSubjectIdRef.current !== null) {
         clearForNextFile();
       }
+      applyNextRosterEntry();
       prevSubjectIdRef.current = activeSubjectId;
     }
-  }, [activeSubjectId, clearForNextFile]);
+  }, [activeSubjectId, clearForNextFile, applyNextRosterEntry]);
 
   // Load font faces for preview
   const [fontsLoaded, setFontsLoaded] = useState(false);

@@ -40,6 +40,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Supabase client unavailable." }, { status: 503 });
   }
 
+  // TODO: Add session_id column to compomate_projects table (migration needed)
+  // and filter here: .eq('session_id', sessionId) to scope results per-session.
+  // Until then, this returns the 25 most recent projects globally.
   const { data, error } = await client
     .from(TABLE)
     .select("id,name,created_at,updated_at")

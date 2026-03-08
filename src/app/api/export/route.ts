@@ -13,6 +13,7 @@ import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 import {
   EXPORT_WIDTH_PX,
   EXPORT_HEIGHT_PX,
+  EXPORT_RATE_LIMIT_PER_MINUTE,
   buildExportFilename,
   DB_TABLES,
 } from "@/lib/constants";
@@ -22,6 +23,9 @@ import type { NameOverlayConfig } from "@/types/composition";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+// Module-level cache — valid within a warm Vercel instance
+const backdropCache = new Map<string, Buffer>();
 
 // ---------------------------------------------------------------------------
 // Request interface
@@ -90,7 +94,7 @@ async function resolveImageBuffer(
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`export:${ip}`, 45, 60_000);
+  const limit = checkRateLimit(`export:${ip}`, EXPORT_RATE_LIMIT_PER_MINUTE, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Export rate limit reached. Please wait and retry." },
@@ -102,10 +106,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const body = (await request.json()) as ExportRequest;
 
     // ── Resolve image buffers (R2 preferred, data URL fallback) ─────────────
-    const [subjectBuffer, backdropBuffer] = await Promise.all([
+    const backdropCacheKey = body.backdropR2Key;
+    const cachedBackdrop = backdropCacheKey ? backdropCache.get(backdropCacheKey) : undefined;
+
+    const [subjectBuffer, resolvedBackdropBuffer] = await Promise.all([
       resolveImageBuffer(body.subjectR2Key, body.subjectDataUrl, "subject"),
-      resolveImageBuffer(body.backdropR2Key, body.backdropDataUrl, "backdrop"),
+      cachedBackdrop !== undefined
+        ? Promise.resolve(cachedBackdrop)
+        : resolveImageBuffer(body.backdropR2Key, body.backdropDataUrl, "backdrop"),
     ]);
+
+    const backdropBuffer = resolvedBackdropBuffer;
+    if (backdropCacheKey && cachedBackdrop === undefined) {
+      backdropCache.set(backdropCacheKey, backdropBuffer);
+    }
 
     // ── Build name overlay config ────────────────────────────────────────────
     const nameOverlay: NameOverlayConfig = {

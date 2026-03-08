@@ -218,10 +218,10 @@ export async function runCompositorPipeline(
     );
   }
 
-  // ── 11. Final encode at 300 DPI ─────────────────────────────────────────
+  // ── 11. Final encode at 300 DPI with sRGB ICC profile ───────────────────
   const finalBuffer = await sharp(canvasBuffer)
     .toColorspace('srgb')
-    .withMetadata({ density: EXPORT_DPI })
+    .withMetadata({ density: EXPORT_DPI, icc: 'srgb' })
     .png({ compressionLevel: 6 })
     .toBuffer();
 

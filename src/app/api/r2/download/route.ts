@@ -28,6 +28,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "key is required." }, { status: 400 });
   }
 
+  // SECURITY NOTE: Only prefix is validated here. Any caller who knows the key
+  // can delete/download any file. Full ownership enforcement requires a session→key
+  // binding table. Acceptable for single-operator use; harden before multi-tenant launch.
   const isAllowed = ALLOWED_PREFIXES.some((prefix) => key.startsWith(prefix));
   if (!isAllowed) {
     return NextResponse.json(

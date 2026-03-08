@@ -21,6 +21,8 @@ export interface ToastMessage {
 export interface FilesSlice {
   subjects: Asset[];
   activeSubjectId: string | null;
+  /** Sequential name queue loaded from a CSV roster. Consumed one entry per subject advance. */
+  rosterQueue: Array<{ firstName: string; lastName: string }>;
   addSubjects: (assets: Asset[]) => void;
   replaceSubjects: (assets: Asset[]) => void;
   removeSubject: (id: string) => void;
@@ -28,6 +30,13 @@ export interface FilesSlice {
   setActiveSubject: (id: string | null) => void;
   nextSubject: () => void;
   prevSubject: () => void;
+  markExported: (id: string) => void;
+  /** Replace the roster queue entirely. Immediately applies row 0 to the current active subject's name fields (if any subject is active). */
+  loadRoster: (rows: Array<{ firstName: string; lastName: string }>) => void;
+  /** Empties the roster queue. */
+  clearRoster: () => void;
+  /** Pops the front of rosterQueue and writes firstName/lastName into the store. No-op when queue is empty. */
+  applyNextRosterEntry: () => void;
 }
 
 // ---------------------------------------------------------------------------

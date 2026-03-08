@@ -62,6 +62,19 @@ export function useKeyboardShortcuts() {
         setShowShortcuts(true);
         return;
       }
+
+      // F — focus first name field (no-op when already in an input)
+      if (
+        e.key === 'f' &&
+        !(
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLSelectElement
+        )
+      ) {
+        window.dispatchEvent(new CustomEvent('compomate:focus-name'));
+        return;
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown);

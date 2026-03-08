@@ -325,14 +325,32 @@ function buildTextMarkup(
     lastAnchor = 'start';
   }
 
+  // Constrain overly long names — prevent text from overflowing the canvas.
+  // Use measured width when available; fall back to a simple heuristic.
+  const MAX_TEXT_WIDTH = 3800; // 100px margin each side of the 4000px canvas
+  const firstEstimatedWidth = firstMetrics
+    ? firstMetrics.width
+    : firstSize * 0.6 * [...first].length;
+  const lastEstimatedWidth = lastMetrics
+    ? lastMetrics.width
+    : lastSize * 0.6 * [...last].length;
+  const firstTextLengthAttr =
+    firstEstimatedWidth > MAX_TEXT_WIDTH
+      ? `textLength="${MAX_TEXT_WIDTH}" lengthAdjust="spacingAndGlyphs"`
+      : '';
+  const lastTextLengthAttr =
+    lastEstimatedWidth > MAX_TEXT_WIDTH
+      ? `textLength="${MAX_TEXT_WIDTH}" lengthAdjust="spacingAndGlyphs"`
+      : '';
+
   return `
     ${first ? `
-      <text x="${firstX}" y="${baselineY}" text-anchor="${firstAnchor}" dominant-baseline="alphabetic" font-family="${fontFaces.firstNameFamily}" font-size="${firstSize}" fill="${firstFill}" ${firstStroke} ${filter}>
+      <text x="${firstX}" y="${baselineY}" text-anchor="${firstAnchor}" dominant-baseline="alphabetic" font-family="${fontFaces.firstNameFamily}" font-size="${firstSize}" fill="${firstFill}" ${firstStroke} ${filter} ${firstTextLengthAttr}>
         ${safeFirst}
       </text>
     ` : ''}
     ${last ? `
-      <text x="${lastX}" y="${baselineY}" text-anchor="${lastAnchor}" dominant-baseline="alphabetic" font-family="${fontFaces.lastNameFamily}" font-size="${lastSize}" font-weight="700" letter-spacing="0.12em" fill="${lastFill}" ${lastStroke} ${filter}>
+      <text x="${lastX}" y="${baselineY}" text-anchor="${lastAnchor}" dominant-baseline="alphabetic" font-family="${fontFaces.lastNameFamily}" font-size="${lastSize}" font-weight="700" letter-spacing="0.12em" fill="${lastFill}" ${lastStroke} ${filter} ${lastTextLengthAttr}>
         ${safeLast}
       </text>
     ` : ''}

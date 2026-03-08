@@ -1,12 +1,14 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { CheckCircle2, Search } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { useSubjects } from '@/lib/store/selectors';
 import { filesToAssets, collectImageFiles } from '@/lib/client/utils';
 import { computeAutoPlacement } from '@/lib/client/autoPlacement';
 import { uploadFileToR2 } from '@/lib/client/uploader';
+import { RosterImportPanel } from './RosterImportPanel';
 
 export function FilePanel() {
   const subjects = useSubjects();
@@ -17,13 +19,17 @@ export function FilePanel() {
   const setActiveSubject = useStore((s) => s.setActiveSubject);
   const showToast = useStore((s) => s.showToast);
   const updateComposition = useStore((s) => s.updateComposition);
+  const lockSettings = useStore((s) => s.lockSettings);
 
   const objectUrlsRef = useRef(new Set<string>());
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progressText, setProgressText] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
 
   // Auto-placement — run whenever the active subject changes
   useEffect(() => {
+    if (lockSettings) return;
     const subject = subjects.find((s) => s.id === activeSubjectId);
     if (!activeSubjectId || !subject) {
       return;
@@ -39,7 +45,16 @@ export function FilePanel() {
     return () => {
       cancelled = true;
     };
-  }, [activeSubjectId, subjects, updateComposition]);
+  }, [activeSubjectId, subjects, updateComposition, lockSettings]);
+
+  const filteredSubjects = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return subjects;
+    return subjects.filter((s) => {
+      const nameMatch = s.name.toLowerCase().includes(query);
+      return nameMatch;
+    });
+  }, [subjects, searchText]);
 
   function registerUrls(urls: string[]) {
     for (const url of urls) objectUrlsRef.current.add(url);
@@ -48,8 +63,11 @@ export function FilePanel() {
   const handleFiles = useCallback(async (files: File[]): Promise<void> => {
     if (files.length === 0) return;
     setIsProcessing(true);
+    setProgressText(null);
     try {
-      const { assets, skipped } = await filesToAssets(files);
+      const { assets, skipped } = await filesToAssets(files, (current, total) => {
+        setProgressText(`Processing ${current} / ${total}…`);
+      });
       if (assets.length === 0) {
         showToast(skipped[0] ?? 'No valid image files found.');
         return;
@@ -73,6 +91,7 @@ export function FilePanel() {
       }
     } finally {
       setIsProcessing(false);
+      setProgressText(null);
     }
   }, [addSubjects, showToast, updateSubject]);
 
@@ -177,7 +196,7 @@ export function FilePanel() {
       >
         <p className="text-xs">
           {isProcessing
-            ? 'Processing files…'
+            ? (progressText ?? 'Processing files…')
             : isDragOver
               ? 'Drop images here'
               : 'Drag & drop or click to browse'}
@@ -193,8 +212,25 @@ export function FilePanel() {
         </button>
       </div>
 
+      {/* Roster CSV import */}
+      <RosterImportPanel />
+
+      {/* Search input */}
+      {subjects.length > 0 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-soft)]" />
+          <input
+            type="search"
+            className="input w-full pl-8 text-xs"
+            placeholder="Search subjects…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+        </div>
+      )}
+
       <div className="asset-list">
-        {subjects.map((subject) => (
+        {filteredSubjects.map((subject) => (
           <div
             key={subject.id}
             className={`asset-item ${subject.id === activeSubjectId ? 'asset-item-active' : ''}`}
@@ -204,11 +240,19 @@ export function FilePanel() {
               type="button"
               onClick={() => setActiveSubject(subject.id)}
             >
-              <img
-                className="h-12 w-12 rounded object-cover"
-                src={subject.objectUrl}
-                alt={subject.name}
-              />
+              <div className="relative h-12 w-12 flex-shrink-0">
+                <img
+                  className="h-12 w-12 rounded object-cover"
+                  src={subject.objectUrl}
+                  alt={subject.name}
+                />
+                {subject.exported && (
+                  <CheckCircle2
+                    className="absolute right-0 top-0 h-4 w-4 text-green-400 drop-shadow"
+                    aria-label="Exported"
+                  />
+                )}
+              </div>
               <span className="truncate">{subject.name}</span>
             </button>
             <button

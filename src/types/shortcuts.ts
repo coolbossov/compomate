@@ -16,6 +16,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { key: 'ArrowDown', description: 'Nudge down 1px' },
   { key: 'ArrowLeft', description: 'Nudge left 1px' },
   { key: 'ArrowRight', description: 'Nudge right 1px' },
+  { key: 'Tab', description: 'Next subject (name entry panel)' },
   { key: 'ArrowUp', description: 'Nudge up 10px', modifiers: ['shift'] },
   { key: 'ArrowDown', description: 'Nudge down 10px', modifiers: ['shift'] },
   { key: 'ArrowLeft', description: 'Nudge left 10px', modifiers: ['shift'] },

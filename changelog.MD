@@ -6,6 +6,92 @@
 
 ---
 
+## [Unreleased] — 2026-03-07 — 19-Issue Implementation Pass (Claude claude-sonnet-4-6)
+
+### Summary
+Seven parallel specialist agents implemented all 19 issues surfaced by the previous read-only assessment. 285 tests passing. 0 tsc errors.
+
+### CRITICAL Fixes
+
+**lockSettings now actually works — auto-placement was ignoring the lock**
+- `FilePanel.tsx`: Added `lockSettings` selector + early-return guard at top of the subject-advance `useEffect`. When locked, advancing subjects skips `updateComposition` entirely.
+
+**Batch export snapshot now captures all overlay fields**
+- `BatchItem` type extended with `nameOverlayEnabled`, `nameSizePct`, `nameYFromBottomPct`
+- `ExportPanel.tsx`: These three fields are now snapshotted at queue-time, not read from live store at export-time. Mid-batch overlay changes no longer affect already-queued items.
+
+**Batch queue labels now show athlete names, not filenames**
+- `ExportPanel.tsx`: Label is now `"${firstName} ${lastName}".trim()` with filename fallback.
+
+**Auto-placement pixel scan no longer freezes UI**
+- `autoPlacement.ts`: Centroid fallback now downsamples the image to max 400px on the longest side before pixel iteration. Ratios are resolution-independent so accuracy is preserved. Eliminates 1–3s main-thread freeze per subject advance.
+
+**`subjectHeightPct` no longer hardcoded to 64 for all subjects**
+- `autoPlacement.ts`: Both MediaPipe and centroid paths now compute height from the image aspect ratio using the same formula as ControlPanel's manual auto-place: `clamp(62 + (0.52 - w/h) * 26, 48, 82)`. Falls back to 64 only when dimensions are unavailable.
+
+### HIGH — New Features
+
+**CSV Roster Import**
+- New `RosterImportPanel.tsx`: button opens hidden file input, parses CSV client-side (no library), calls `loadRoster()`. Shows remaining count badge and Clear button.
+- Store: `rosterQueue`, `loadRoster`, `clearRoster`, `applyNextRosterEntry` added to `filesSlice`.
+- Sequential matching: row 1 → first imported file, etc. Names pre-fill automatically on subject advance via `NameEntryPanel`'s subject-change `useEffect`. Handles roster-loaded-before-subjects and roster-loaded-mid-session correctly.
+
+**Per-subject "done" tracking**
+- `Asset` type: `exported?: boolean` added.
+- `filesSlice`: `markExported(id)` action sets the flag.
+- `ExportPanel`: calls `markExported` after single export success and after each batch item success.
+- `FilePanel`: green `CheckCircle2` badge overlaid top-right of exported thumbnails.
+
+**Subject search/filter**
+- `FilePanel`: search input (lucide `Search` icon, "Search subjects…" placeholder) filters the visible list by filename or `firstName + lastName` (case-insensitive, `useMemo`). Store array unchanged.
+
+**Parallel file loading with progress**
+- `filesToAssets` refactored: 8-concurrent `Promise.all` chunks + optional `onProgress(current, total)` callback.
+- `FilePanel`: passes callback, shows "Processing N / Total…" in the drop zone during load.
+
+### HIGH — Keyboard Improvements
+
+**F key focuses first name field**
+- `useKeyboardShortcuts.ts`: `f` key (when not in an input/textarea/select) dispatches `compomate:focus-name` custom event.
+- `NameEntryPanel.tsx`: listens for `compomate:focus-name`, focuses `firstNameRef`.
+
+**Tab → next subject now visible in shortcuts overlay**
+- `shortcuts.ts`: `{ key: 'Tab', description: 'Next subject (name entry panel)' }` added. Rendered automatically by `ShortcutsOverlay` via existing map.
+
+### MEDIUM — Export Quality
+
+**ICC sRGB profile embedded in all exports**
+- `pipeline.ts`: `.withMetadata({ density: EXPORT_DPI, icc: 'srgb' })`. Sharp 0.34.5 confirmed supported.
+
+**Backdrop cached per warm Vercel instance**
+- `export/route.ts`: module-level `Map<string, Buffer>` keyed by R2 key. Cache miss downloads + processes; hit skips both. Data-URL backdrops bypass cache.
+
+**Long names no longer silently clip**
+- `name-overlay.ts`: estimates rendered width (`fontSize * 0.6 * charCount`). If `> 3800px`, injects `textLength="3800" lengthAdjust="spacingAndGlyphs"` on the SVG `<text>` element.
+
+**Rate limit constant aligned: 30 → 45**
+- `constants.ts`: `EXPORT_RATE_LIMIT_PER_MINUTE = 45`
+- `export/route.ts`: now imports and uses the constant instead of a hardcoded `45`.
+
+### Infrastructure / Documentation
+
+**Supabase migration conflict resolved**
+- `20260307_compomate_full_schema.sql`: `session_token` → `session_id` in `compomate_templates` definition to match API code and the other migration.
+- Added rollback comment at top of file.
+- New `20260308_add_session_id_to_projects.sql`: adds `session_id TEXT` + index to `compomate_projects`.
+
+**Projects API scoping documented**
+- `.env.example`: `COMPOMATE_ALLOW_UNAUTHENTICATED_PROJECT_PERSISTENCE=false` added with warning.
+- `projects/route.ts`: TODO comment added above unscoped GET query with upgrade path.
+
+**R2 ownership gap documented**
+- `r2/delete/route.ts` + `r2/download/route.ts`: SECURITY NOTE comments added.
+
+**Rate limit in-process limitation documented**
+- `rate-limit.ts`: NOTE comment added explaining Map is not shared across Vercel instances, with Upstash upgrade path.
+
+---
+
 ## [Unreleased] — 2026-03-07 — Second Audit Pass (Claude claude-sonnet-4-6)
 
 ### Summary

@@ -237,7 +237,12 @@ export async function r2KeyToBackdropAsset(
 // Batch asset loading
 // ---------------------------------------------------------------------------
 
-export async function filesToAssets(files: File[]): Promise<{ assets: Asset[]; skipped: string[] }> {
+const CONCURRENCY = 8;
+
+export async function filesToAssets(
+  files: File[],
+  onProgress?: (current: number, total: number) => void,
+): Promise<{ assets: Asset[]; skipped: string[] }> {
   const skipped: string[] = [];
   const imageFiles = files.filter(isImageFile);
   const limitedFiles = imageFiles.slice(0, MAX_FILES_PER_IMPORT);
@@ -246,18 +251,38 @@ export async function filesToAssets(files: File[]): Promise<{ assets: Asset[]; s
     skipped.push(`${imageFiles.length - limitedFiles.length} file(s) skipped (import limit ${MAX_FILES_PER_IMPORT}).`);
   }
 
+  const total = limitedFiles.length;
   const assets: Asset[] = [];
-  for (const file of limitedFiles) {
-    if (file.size > MAX_FILE_BYTES) {
-      skipped.push(`${file.name} skipped (file too large).`);
-      continue;
+  let processed = 0;
+
+  for (let i = 0; i < limitedFiles.length; i += CONCURRENCY) {
+    const chunk = limitedFiles.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (file) => {
+        if (file.size > MAX_FILE_BYTES) {
+          return { asset: null as Asset | null, error: `${file.name} skipped (file too large).` };
+        }
+        try {
+          const asset = await fileToAsset(file);
+          return { asset, error: null as string | null };
+        } catch (error) {
+          return { asset: null as Asset | null, error: error instanceof Error ? error.message : 'Failed to load file.' };
+        }
+      }),
+    );
+
+    for (const result of results) {
+      if (result.asset) {
+        assets.push(result.asset);
+      } else if (result.error) {
+        skipped.push(result.error);
+      }
     }
-    try {
-      assets.push(await fileToAsset(file));
-    } catch (error) {
-      skipped.push(error instanceof Error ? error.message : 'Failed to load file.');
-    }
+
+    processed += chunk.length;
+    onProgress?.(processed, total);
   }
+
   return { assets, skipped };
 }
 

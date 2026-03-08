@@ -14,6 +14,9 @@ export interface BatchItem {
   exportProfile: ExportProfileId;
   nameStyle: NameStyleId;
   fontPairId: FontPairId;
+  nameOverlayEnabled: boolean;
+  nameSizePct: number;
+  nameYFromBottomPct: number;
   status: BatchStatus;
   error?: string;
   exportedFilename?: string;

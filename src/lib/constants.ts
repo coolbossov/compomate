@@ -92,7 +92,7 @@ export const MEDIAPIPE_RUNNING_MODE = "IMAGE";
 
 // --- Export ---
 export const EXPORT_TOAST_DURATION_MS = 4000;
-export const EXPORT_RATE_LIMIT_PER_MINUTE = 30;
+export const EXPORT_RATE_LIMIT_PER_MINUTE = 45;
 
 // --- Export payload budget (bytes sent to cloud render API) ---
 export const EXPORT_PAYLOAD_TARGET_BYTES = 3_700_000; // soft budget — try to compress below

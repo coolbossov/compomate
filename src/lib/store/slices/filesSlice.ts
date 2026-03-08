@@ -12,6 +12,7 @@ export type FilesSliceCreator = StateCreator<
 export const createFilesSlice: FilesSliceCreator = (set) => ({
   subjects: [],
   activeSubjectId: null,
+  rosterQueue: [],
 
   addSubjects: (assets: Asset[]) =>
     set((draft) => {
@@ -71,5 +72,46 @@ export const createFilesSlice: FilesSliceCreator = (set) => ({
         return;
       }
       draft.activeSubjectId = draft.subjects[(idx - 1 + draft.subjects.length) % draft.subjects.length].id;
+    }),
+
+  markExported: (id: string) =>
+    set((draft) => {
+      const subject = draft.subjects.find((s: Asset) => s.id === id);
+      if (subject) subject.exported = true;
+    }),
+
+  loadRoster: (rows) =>
+    set((draft) => {
+      if (rows.length === 0) {
+        draft.rosterQueue = [];
+        return;
+      }
+      // If a subject is already active, apply the first row immediately and
+      // store the remainder as the queue. Otherwise keep all rows queued so
+      // the first applyNextRosterEntry call (on initial subject activation)
+      // consumes row 0.
+      if (draft.activeSubjectId !== null) {
+        draft.firstName = rows[0].firstName;
+        draft.lastName = rows[0].lastName;
+        draft.rosterQueue = rows.slice(1);
+      } else {
+        draft.rosterQueue = rows.slice();
+      }
+    }),
+
+  clearRoster: () =>
+    set((draft) => {
+      draft.rosterQueue = [];
+    }),
+
+  applyNextRosterEntry: () =>
+    set((draft) => {
+      if (draft.rosterQueue.length === 0) return;
+      // Read values before mutating (immer Draft proxy safety)
+      const nextFirst = draft.rosterQueue[0].firstName;
+      const nextLast = draft.rosterQueue[0].lastName;
+      draft.rosterQueue.splice(0, 1);
+      draft.firstName = nextFirst;
+      draft.lastName = nextLast;
     }),
 });
