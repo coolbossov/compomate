@@ -992,3 +992,11 @@ Five parallel specialist agents (Canvas, Export Pipeline, Store/State, API Secur
 - Added bounded FIFO backdrop cache logic in export path and standardized export failure handling.
 - Updated route tests for standardized error-code responses and new status mappings.
 - Added `test:diag` script to `package.json`.
+
+## [2026-03-08] — Codex (Chunk 4)
+
+### Added
+- Added pre-shoot operational validation checklist (`PRE_SHOOT_CHECKLIST.md`).
+
+### Notes
+- Checklist is designed for live volume readiness: diagnostics, happy path, stress tests, edge cases, and recovery validation.
