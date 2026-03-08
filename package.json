@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "npm run lint && npm run test && npm run build",
+    "test:diag": "curl -sf https://composite.sapicture.day/api/diagnostics",
     "audit": "npm audit --omit=dev"
   },
   "dependencies": {

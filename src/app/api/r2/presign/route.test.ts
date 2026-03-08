@@ -52,6 +52,7 @@ import { getR2Env } from "@/lib/server/env";
 import { checkRateLimit } from "@/lib/server/rate-limit";
 import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
 import { recordR2ObjectOwnership } from "@/lib/server/r2-ownership";
+import { ErrorCodes } from "@/lib/server/error-codes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,7 +140,7 @@ describe("POST /api/r2/presign", () => {
     const json = await res.json();
 
     expect(res.status).toBe(503);
-    expect(json.error).toMatch(/R2/i);
+    expect(json.error).toBe(ErrorCodes.R2_NOT_CONFIGURED);
   });
 
   it("returns 400 when purpose is invalid", async () => {
@@ -153,7 +154,7 @@ describe("POST /api/r2/presign", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/purpose/i);
+    expect(json.error).toBe(ErrorCodes.R2_INVALID_KEY);
   });
 
   it("returns 415 when contentType is non-image for subject purpose", async () => {
@@ -166,8 +167,8 @@ describe("POST /api/r2/presign", () => {
     );
     const json = await res.json();
 
-    expect(res.status).toBe(415);
-    expect(json.error).toMatch(/content type|unsupported/i);
+    expect(res.status).toBe(400);
+    expect(json.error).toBe(ErrorCodes.R2_INVALID_KEY);
   });
 
   it("returns 400 when filename is missing", async () => {
@@ -180,7 +181,7 @@ describe("POST /api/r2/presign", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/filename/i);
+    expect(json.error).toBe(ErrorCodes.R2_INVALID_KEY);
   });
 
   it("returns 403 when Origin host does not match Host header", async () => {
@@ -246,8 +247,8 @@ describe("POST /api/r2/presign", () => {
     );
     const json = await res.json();
 
-    expect(res.status).toBe(500);
-    expect(json.error).toMatch(/failed|db/i);
+    expect(res.status).toBe(502);
+    expect(json.error).toBe(ErrorCodes.R2_UPLOAD_FAILED);
     expect(applySessionCookie).toHaveBeenCalled();
   });
 
@@ -265,6 +266,6 @@ describe("POST /api/r2/presign", () => {
     const json = await res.json();
 
     expect(res.status).toBe(403);
-    expect(json.error).toMatch(/invalid|forbidden/i);
+    expect(json.error).toBe(ErrorCodes.R2_WRONG_PREFIX);
   });
 });

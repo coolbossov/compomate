@@ -15,6 +15,8 @@ import { getR2Env } from "@/lib/server/env";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
 import { recordR2ObjectOwnership } from "@/lib/server/r2-ownership";
+import { ErrorCodes, HTTP_STATUS } from "@/lib/server/error-codes";
+import { log } from "@/lib/server/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 30; // Fluid Compute
@@ -37,15 +39,20 @@ type PresignRequestBody = {
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const t0 = Date.now();
+  const requestId = request.headers.get("x-request-id") ?? "unknown";
+
   // --- R2 credentials check (graceful 503 when unconfigured) ---
   const r2Env = getR2Env();
   if (!r2Env) {
+    log.warn("r2.presign.unconfigured", {
+      request_id: requestId,
+      error_code: ErrorCodes.R2_NOT_CONFIGURED,
+      duration_ms: Date.now() - t0,
+    });
     return NextResponse.json(
-      {
-        error:
-          "R2 not configured. Add R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY to your environment.",
-      },
-      { status: 503 },
+      { error: ErrorCodes.R2_NOT_CONFIGURED },
+      { status: HTTP_STATUS[ErrorCodes.R2_NOT_CONFIGURED] },
     );
   }
 
@@ -57,10 +64,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
       originHost = new URL(origin).host;
     } catch {
-      return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+      log.warn("r2.presign.invalid_origin", {
+        request_id: requestId,
+        error_code: ErrorCodes.R2_WRONG_PREFIX,
+        duration_ms: Date.now() - t0,
+      });
+      return NextResponse.json(
+        { error: ErrorCodes.R2_WRONG_PREFIX },
+        { status: HTTP_STATUS[ErrorCodes.R2_WRONG_PREFIX] },
+      );
     }
     if (host && originHost !== host) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      log.warn("r2.presign.forbidden_origin", {
+        request_id: requestId,
+        error_code: ErrorCodes.R2_WRONG_PREFIX,
+        duration_ms: Date.now() - t0,
+      });
+      return NextResponse.json(
+        { error: ErrorCodes.R2_WRONG_PREFIX },
+        { status: HTTP_STATUS[ErrorCodes.R2_WRONG_PREFIX] },
+      );
     }
   }
 
@@ -68,9 +91,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
   const limit = checkRateLimit(`r2:presign:${ip}`, 100, 60_000);
   if (!limit.allowed) {
+    log.warn("r2.presign.rate_limited", {
+      request_id: requestId,
+      error_code: ErrorCodes.R2_RATE_LIMITED,
+      duration_ms: Date.now() - t0,
+    });
     return NextResponse.json(
-      { error: "Too many upload requests. Please wait and try again." },
-      { status: 429 },
+      { error: ErrorCodes.R2_RATE_LIMITED },
+      { status: HTTP_STATUS[ErrorCodes.R2_RATE_LIMITED] },
     );
   }
 
@@ -79,21 +107,35 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     body = (await request.json()) as PresignRequestBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    log.warn("r2.presign.invalid_json", {
+      request_id: requestId,
+      error_code: ErrorCodes.R2_INVALID_KEY,
+      duration_ms: Date.now() - t0,
+    });
+    return NextResponse.json(
+      { error: ErrorCodes.R2_INVALID_KEY },
+      { status: HTTP_STATUS[ErrorCodes.R2_INVALID_KEY] },
+    );
   }
 
   const { filename, contentType, purpose } = body;
 
   if (typeof filename !== "string" || !filename.trim()) {
-    return NextResponse.json({ error: "filename is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: ErrorCodes.R2_INVALID_KEY },
+      { status: HTTP_STATUS[ErrorCodes.R2_INVALID_KEY] },
+    );
   }
   if (typeof contentType !== "string" || !contentType.trim()) {
-    return NextResponse.json({ error: "contentType is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: ErrorCodes.R2_INVALID_KEY },
+      { status: HTTP_STATUS[ErrorCodes.R2_INVALID_KEY] },
+    );
   }
   if (typeof purpose !== "string" || !VALID_PURPOSES.has(purpose as Purpose)) {
     return NextResponse.json(
-      { error: "purpose must be 'subject', 'backdrop', or 'export'." },
-      { status: 400 },
+      { error: ErrorCodes.R2_INVALID_KEY },
+      { status: HTTP_STATUS[ErrorCodes.R2_INVALID_KEY] },
     );
   }
 
@@ -103,10 +145,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // --- Content type validation (images only for subject/backdrop) ---
   if (normalizedPurpose !== "export" && !ALLOWED_IMAGE_TYPES.has(contentType)) {
     return NextResponse.json(
-      {
-        error: `Unsupported content type '${contentType}'. Allowed: image/png, image/jpeg, image/tiff, image/webp`,
-      },
-      { status: 415 },
+      { error: ErrorCodes.R2_INVALID_KEY },
+      { status: HTTP_STATUS[ErrorCodes.R2_INVALID_KEY] },
     );
   }
 
@@ -133,13 +173,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       getPresignedDownloadUrl(key),
     ]);
 
+    log.info("r2.presign.ok", {
+      request_id: requestId,
+      duration_ms: Date.now() - t0,
+      key,
+      purpose: normalizedPurpose,
+    });
+
     const response = NextResponse.json({ uploadUrl, key, downloadUrl });
     applySessionCookie(response, sessionId, isNew);
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to generate presigned URL.";
-    console.error("[r2/presign] Error:", message);
-    const response = NextResponse.json({ error: message }, { status: 500 });
+    log.error("r2.presign.failed", {
+      request_id: requestId,
+      error_code: ErrorCodes.R2_UPLOAD_FAILED,
+      duration_ms: Date.now() - t0,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    const response = NextResponse.json(
+      { error: ErrorCodes.R2_UPLOAD_FAILED },
+      { status: HTTP_STATUS[ErrorCodes.R2_UPLOAD_FAILED] },
+    );
     applySessionCookie(response, sessionId, isNew);
     return response;
   }

@@ -974,3 +974,21 @@ Five parallel specialist agents (Canvas, Export Pipeline, Store/State, API Secur
 - Fixed `NameEntryPanel` lint error (`react-hooks/set-state-in-effect`) with targeted inline rule disable.
 - Updated projects route tests to support session-filter query chain.
 - Hardened session cookie helper for test contexts by safely handling no-request-scope cookie calls.
+
+## [2026-03-08] — Codex (Chunk 3)
+
+### Added
+- Added request ID middleware for all API routes (`src/middleware.ts`).
+- Added normalized server error taxonomy (`src/lib/server/error-codes.ts`).
+- Added structured JSON logger with redaction + level filtering (`src/lib/server/logger.ts`).
+- Added logger test coverage (`src/lib/server/logger.test.ts`).
+- Added diagnostics endpoint (`src/app/api/diagnostics/route.ts`) and tests (`src/app/api/diagnostics/route.test.ts`).
+- Added troubleshooting runbook (`TROUBLESHOOTING.md`).
+
+### Changed
+- Replaced static Sentry sample rates with route-aware `tracesSampler` in client/server/edge configs.
+- Added presigned URL scrubbing in Sentry `beforeSend` hooks (client/server).
+- Refactored `/api/r2/presign`, `/api/r2/download`, `/api/r2/delete`, and `/api/export` to emit structured logs and standardized error codes.
+- Added bounded FIFO backdrop cache logic in export path and standardized export failure handling.
+- Updated route tests for standardized error-code responses and new status mappings.
+- Added `test:diag` script to `package.json`.

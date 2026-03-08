@@ -38,6 +38,7 @@ import { checkRateLimit } from "@/lib/server/rate-limit";
 import { getSessionIdFromCookie } from "@/lib/server/session-cookie";
 import { removeR2ObjectOwnership, verifyR2ObjectOwnership } from "@/lib/server/r2-ownership";
 import { deleteR2Object } from "@/lib/server/r2";
+import { ErrorCodes } from "@/lib/server/error-codes";
 
 function createRequest(body: unknown): NextRequest {
   return new NextRequest(new URL("http://localhost:3000/api/r2/delete"), {
@@ -101,7 +102,10 @@ describe("DELETE /api/r2/delete", () => {
 
   it("returns 400 when key is missing", async () => {
     const res = await DELETE(createRequest({ key: "" }));
+    const json = await res.json();
+
     expect(res.status).toBe(400);
+    expect(json.error).toBe(ErrorCodes.R2_INVALID_KEY);
   });
 
   it("returns 403 when key prefix is not allowed", async () => {
@@ -123,18 +127,24 @@ describe("DELETE /api/r2/delete", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns 500 when ownership check throws", async () => {
+  it("returns 503 when ownership check throws", async () => {
     vi.mocked(verifyR2ObjectOwnership).mockRejectedValue(new Error("db failure"));
 
     const res = await DELETE(createRequest({ key: "subjects/mock-key.png" }));
-    expect(res.status).toBe(500);
+    const json = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(json.error).toBe(ErrorCodes.R2_OWNERSHIP_TIMEOUT);
   });
 
   it("returns 500 when deleteR2Object throws", async () => {
     vi.mocked(deleteR2Object).mockRejectedValue(new Error("r2 delete failure"));
 
     const res = await DELETE(createRequest({ key: "subjects/mock-key.png" }));
+    const json = await res.json();
+
     expect(res.status).toBe(500);
+    expect(json.error).toBe(ErrorCodes.R2_DELETE_FAILED);
   });
 
   it("returns 200 even when ownership cleanup fails", async () => {

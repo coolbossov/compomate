@@ -37,6 +37,7 @@ import { checkRateLimit } from "@/lib/server/rate-limit";
 import { getSessionIdFromCookie } from "@/lib/server/session-cookie";
 import { verifyR2ObjectOwnership } from "@/lib/server/r2-ownership";
 import { getPresignedDownloadUrl } from "@/lib/server/r2";
+import { ErrorCodes } from "@/lib/server/error-codes";
 
 function createRequest(key?: string): NextRequest {
   const url = new URL("http://localhost:3000/api/r2/download");
@@ -83,7 +84,7 @@ describe("GET /api/r2/download", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/key/i);
+    expect(json.error).toBe(ErrorCodes.R2_INVALID_KEY);
   });
 
   it("returns 503 when R2 is not configured", async () => {
@@ -123,10 +124,13 @@ describe("GET /api/r2/download", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns 500 when ownership check throws", async () => {
+  it("returns 503 when ownership check throws", async () => {
     vi.mocked(verifyR2ObjectOwnership).mockRejectedValue(new Error("db failure"));
 
     const res = await GET(createRequest("subjects/mock-key.png"));
-    expect(res.status).toBe(500);
+    const json = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(json.error).toBe(ErrorCodes.R2_OWNERSHIP_TIMEOUT);
   });
 });

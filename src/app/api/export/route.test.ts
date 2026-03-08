@@ -69,6 +69,7 @@ import {
   removeR2ObjectOwnership,
   verifyR2ObjectOwnership,
 } from "@/lib/server/r2-ownership";
+import { ErrorCodes } from "@/lib/server/error-codes";
 import type { CompositionState } from "@/lib/shared/composition";
 
 // ---------------------------------------------------------------------------
@@ -200,7 +201,7 @@ describe("POST /api/export", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/subject/i);
+    expect(json.error).toBe(ErrorCodes.EXPORT_INVALID_INPUT);
   });
 
   it("returns 400 when missing both backdropDataUrl and backdropR2Key", async () => {
@@ -211,7 +212,7 @@ describe("POST /api/export", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/backdrop/i);
+    expect(json.error).toBe(ErrorCodes.EXPORT_INVALID_INPUT);
   });
 
   it("returns 429 when rate limit exceeded", async () => {
@@ -247,8 +248,8 @@ describe("POST /api/export", () => {
     const res = await POST(createRequest(validBody()));
     const json = await res.json();
 
-    expect(res.status).toBe(500);
-    expect(json.error).toContain("Sharp processing failed");
+    expect(res.status).toBe(502);
+    expect(json.error).toBe(ErrorCodes.R2_UPLOAD_FAILED);
   });
 
   it("returns 503 with retryable flag when compositor times out", async () => {
@@ -259,9 +260,9 @@ describe("POST /api/export", () => {
     const res = await POST(createRequest(validBody()));
     const json = await res.json();
 
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(504);
     expect(json.retryable).toBe(true);
-    expect(json.error).toMatch(/too long|retry/i);
+    expect(json.error).toBe(ErrorCodes.EXPORT_TIMEOUT);
   });
 
   it("passes correct composition values to runCompositorPipeline", async () => {
@@ -295,7 +296,7 @@ describe("POST /api/export", () => {
     const json = await res.json();
 
     expect(res.status).toBe(403);
-    expect(json.error).toMatch(/not accessible in this session/i);
+    expect(json.error).toBe(ErrorCodes.R2_OWNERSHIP_MISS);
   });
 
   it("records ownership for generated export keys", async () => {
@@ -324,7 +325,7 @@ describe("POST /api/export", () => {
     const json = await res.json();
 
     expect(res.status).toBe(403);
-    expect(json.error).toMatch(/not accessible in this session/i);
+    expect(json.error).toBe(ErrorCodes.R2_OWNERSHIP_MISS);
   });
 
   it("returns 403 for key outside managed prefixes", async () => {
@@ -337,7 +338,7 @@ describe("POST /api/export", () => {
     const json = await res.json();
 
     expect(res.status).toBe(403);
-    expect(json.error).toMatch(/managed prefix/i);
+    expect(json.error).toBe(ErrorCodes.R2_OWNERSHIP_MISS);
   });
 
   it("returns 503 when ownership write fails before upload", async () => {
@@ -361,8 +362,8 @@ describe("POST /api/export", () => {
     const res = await POST(createRequest(body));
     const json = await res.json();
 
-    expect(res.status).toBe(500);
-    expect(json.error).toMatch(/lookup failed/i);
+    expect(res.status).toBe(502);
+    expect(json.error).toBe(ErrorCodes.R2_UPLOAD_FAILED);
   });
 
   it("succeeds for owned subjectR2Key and backdropR2Key", async () => {

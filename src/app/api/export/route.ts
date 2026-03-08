@@ -16,6 +16,8 @@ import {
   removeR2ObjectOwnership,
   verifyR2ObjectOwnership,
 } from "@/lib/server/r2-ownership";
+import { ErrorCodes, HTTP_STATUS } from "@/lib/server/error-codes";
+import { log } from "@/lib/server/logger";
 import {
   EXPORT_WIDTH_PX,
   EXPORT_HEIGHT_PX,
@@ -134,12 +136,18 @@ async function assertR2Access(
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
+  const requestId = request.headers.get("x-request-id") ?? "unknown";
   const ip = requestIp(request.headers);
   const limit = checkRateLimit(`export:${ip}`, EXPORT_RATE_LIMIT_PER_MINUTE, 60_000);
   if (!limit.allowed) {
+    log.warn("export.rate_limited", {
+      request_id: requestId,
+      error_code: ErrorCodes.R2_RATE_LIMITED,
+      duration_ms: Date.now() - startTime,
+    });
     return NextResponse.json(
-      { error: "Export rate limit reached. Please wait and retry." },
-      { status: 429 },
+      { error: ErrorCodes.R2_RATE_LIMITED },
+      { status: HTTP_STATUS[ErrorCodes.R2_RATE_LIMITED] },
     );
   }
 
@@ -247,6 +255,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           throw new Error(`R2 upload failed (${uploadResponse.status}).`);
         }
 
+        log.info("export.ok", {
+          request_id: requestId,
+          duration_ms: Date.now() - startTime,
+          filename,
+          key: exportKey,
+        });
+
         return withSessionCookie(NextResponse.json({
           filename,
           downloadUrl,
@@ -254,34 +269,67 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           height: EXPORT_HEIGHT_PX,
         }));
       } catch (error) {
+        log.error("export.r2_upload_failed", {
+          request_id: requestId,
+          error_code: ErrorCodes.R2_UPLOAD_FAILED,
+          duration_ms: Date.now() - startTime,
+          key: exportKey,
+          message: error instanceof Error ? error.message : String(error),
+        });
+
         try {
           await removeR2ObjectOwnership(exportKey, sessionState.sessionId);
         } catch {
           // best effort cleanup only
         }
-        console.error("[export] R2 upload failed, falling back to inline download:", error);
       }
     }
 
     // No R2 — inline base64 would exceed Vercel's 4.5MB response limit for 4K exports
-    console.error('[export] R2 unavailable and inline fallback would exceed response size limit. R2 is required for 4000×5000 exports.');
+    log.error("export.storage_unavailable", {
+      request_id: requestId,
+      error_code: ErrorCodes.ENV_MISSING,
+      duration_ms: Date.now() - startTime,
+    });
+
     return withSessionCookie(NextResponse.json(
-      { error: 'Export storage unavailable. Please ensure R2 is configured or retry.', retryable: true },
-      { status: 503 },
+      { error: ErrorCodes.ENV_MISSING, retryable: true },
+      { status: HTTP_STATUS[ErrorCodes.ENV_MISSING] },
     ));
   } catch (error) {
     if ((error as { isTimeout?: boolean }).isTimeout) {
+      log.warn("export.timeout", {
+        request_id: requestId,
+        error_code: ErrorCodes.EXPORT_TIMEOUT,
+        duration_ms: Date.now() - startTime,
+      });
+
       return withSessionCookie(NextResponse.json(
-        { error: "Export took too long. Try with a simpler composition or retry.", retryable: true },
-        { status: 503 },
+        { error: ErrorCodes.EXPORT_TIMEOUT, retryable: true },
+        { status: HTTP_STATUS[ErrorCodes.EXPORT_TIMEOUT] },
       ));
     }
+
     const message = error instanceof Error ? error.message : "Unexpected export error.";
-    const status =
-      message.includes("Missing") || message.includes("Invalid data URL") ? 400
-      : message.includes("managed prefix") || message.includes("not accessible in this session") ? 403
-      : message.includes("too large") || message.includes("image limits") ? 413
-      : 500;
-    return withSessionCookie(NextResponse.json({ error: message }, { status }));
+
+    const errorCode =
+      message.includes("managed prefix") || message.includes("not accessible in this session")
+        ? ErrorCodes.R2_OWNERSHIP_MISS
+        : message.includes("Missing") || message.includes("Invalid data URL")
+          ? ErrorCodes.EXPORT_INVALID_INPUT
+          : message.includes("too large") || message.includes("image limits")
+            ? ErrorCodes.EXPORT_TOO_LARGE
+            : ErrorCodes.R2_UPLOAD_FAILED;
+
+    log.error("export.failed", {
+      request_id: requestId,
+      error_code: errorCode,
+      duration_ms: Date.now() - startTime,
+      message,
+    });
+
+    return withSessionCookie(
+      NextResponse.json({ error: errorCode }, { status: HTTP_STATUS[errorCode] }),
+    );
   }
 }
