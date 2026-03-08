@@ -95,6 +95,7 @@ export function BackdropPanel() {
   const [savedProjects, setSavedProjects] = useState<StoredProjectSummary[]>([]);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isLoadingProjectId, setIsLoadingProjectId] = useState<string | null>(null);
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean | null>(null);
   const [projectPersistenceReason, setProjectPersistenceReason] = useState<string | null>(null);
 
@@ -422,6 +423,21 @@ export function BackdropPanel() {
 
   async function loadProject(projectId: string): Promise<void> {
     if (supabaseConfigured === false) { showToast(projectPersistenceReason ?? 'Remote persistence unavailable.'); return; }
+
+    if (isLoadingProjectId !== null) {
+      return;
+    }
+
+    const shouldReplace = window.confirm(
+      'Loading this project replaces your current backdrop, subject, and queued exports. Continue?',
+    );
+
+    if (!shouldReplace) {
+      return;
+    }
+
+    setIsLoadingProjectId(projectId);
+
     try {
       const response = await fetch(`/api/projects/${projectId}`, { cache: 'no-store' });
       if (!response.ok) { const text = await response.text(); throw new Error(parseErrorText(text)); }
@@ -465,6 +481,8 @@ export function BackdropPanel() {
       showToast('Project loaded.');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Project load failed.');
+    } finally {
+      setIsLoadingProjectId(null);
     }
   }
 
@@ -777,8 +795,11 @@ export function BackdropPanel() {
                 className="asset-select"
                 type="button"
                 onClick={() => { void loadProject(project.id); }}
+                disabled={isLoadingProjects || isLoadingProjectId !== null}
               >
-                <span className="truncate">{project.name}</span>
+                <span className="truncate">
+                  {isLoadingProjectId === project.id ? `Loading ${project.name}...` : project.name}
+                </span>
               </button>
               <span className="text-[10px] text-[var(--text-soft)]">
                 {new Date(project.updated_at).toLocaleDateString()}

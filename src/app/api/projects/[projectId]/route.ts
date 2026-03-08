@@ -4,6 +4,7 @@ import {
 } from "@/lib/server/supabase-admin";
 import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { getSessionIdFromCookie } from "@/lib/server/session-cookie";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -45,17 +46,25 @@ export async function GET(
     return NextResponse.json({ error: "Missing project id." }, { status: 400 });
   }
 
+  const sessionId = await getSessionIdFromCookie();
+  if (!sessionId) {
+    return NextResponse.json({ error: "No session. Save or list projects first." }, { status: 401 });
+  }
+
   const { data, error } = await client
     .from(TABLE)
     .select("id,name,payload,created_at,updated_at")
     .eq("id", projectId)
-    .single();
+    .eq("session_id", sessionId)
+    .maybeSingle();
 
   if (error) {
-    const status = error.code === "PGRST116" ? 404 : 500;
-    const message = status === 404 ? "Project not found." : "Failed to load project.";
     console.error("[projects] Database error:", error.message);
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: "Failed to load project." }, { status: 500 });
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
 
   return NextResponse.json({ project: data });

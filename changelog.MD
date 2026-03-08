@@ -1000,3 +1000,22 @@ Five parallel specialist agents (Canvas, Export Pipeline, Store/State, API Secur
 
 ### Notes
 - Checklist is designed for live volume readiness: diagnostics, happy path, stress tests, edge cases, and recovery validation.
+
+## [2026-03-08] — Codex (Agent Hardening Pass)
+
+### Changed
+- Secured project-by-id API against cross-session reads by enforcing `session_id` scoping in `src/app/api/projects/[projectId]/route.ts`.
+- Hardened diagnostics endpoint in production with token-gated access (`DIAGNOSTICS_TOKEN`) and sanitized check details in production responses.
+- Aligned diagnostics env checks with runtime requirements (`SUPABASE_URL|NEXT_PUBLIC_SUPABASE_URL`; removed hard dependency on `R2_ACCOUNT_ID`).
+- Improved project loading UX safety in `BackdropPanel`: destructive-load confirmation + in-flight load guard to prevent racing project loads.
+- Fixed first-batch approval gating in `ExportPanel` to block batch continuation until explicit operator decision.
+
+### Added
+- Added dedicated coverage for secured project-by-id route (`src/app/api/projects/[projectId]/route.test.ts`).
+- Added middleware request-id propagation coverage (`src/middleware.test.ts`).
+- Expanded diagnostics route tests for production access-gating behavior and response-shape validation.
+
+### Validation
+- `npm run lint` (0 errors)
+- `npm test` (336 passing)
+- `npm run build` (success)

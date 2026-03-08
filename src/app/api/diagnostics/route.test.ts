@@ -17,7 +17,6 @@ import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
 import { GET } from "./route";
 
 const R2_ENV = {
-  R2_ACCOUNT_ID: "acc",
   R2_ACCESS_KEY_ID: "key",
   R2_SECRET_ACCESS_KEY: "secret",
   R2_BUCKET_NAME: "bucket",
@@ -41,9 +40,11 @@ describe("GET /api/diagnostics", () => {
     for (const key of [...Object.keys(R2_ENV), ...Object.keys(SUPABASE_ENV)]) {
       delete process.env[key];
     }
+    delete process.env.DIAGNOSTICS_TOKEN;
+    delete process.env.NODE_ENV;
   });
 
-  it("returns structured checks when env and supabase are configured", async () => {
+  it("returns healthy env/supabase checks when dependencies are configured", async () => {
     Object.assign(process.env, R2_ENV, SUPABASE_ENV);
     vi.mocked(getSupabaseAdminClient).mockReturnValue({
       from: () => ({
@@ -125,5 +126,63 @@ describe("GET /api/diagnostics", () => {
     expect(body.status).toBe("degraded");
     expect(body.checks.supabase.ok).toBe(false);
     expect(body.checks.supabase.detail).toContain("DB error");
+  });
+
+  it("returns 503 in production when diagnostics token is missing", async () => {
+    process.env.NODE_ENV = "production";
+    Object.assign(process.env, R2_ENV, SUPABASE_ENV);
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: () => ({
+        select: () => ({
+          limit: () => Promise.resolve({ error: null }),
+        }),
+      }),
+    } as unknown as ReturnType<typeof getSupabaseAdminClient>);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("ENV_MISSING");
+  });
+
+  it("returns 403 in production when diagnostics token is invalid", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.DIAGNOSTICS_TOKEN = "secret-token";
+    Object.assign(process.env, R2_ENV, SUPABASE_ENV);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("FORBIDDEN");
+  });
+
+  it("allows production diagnostics when token matches", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.DIAGNOSTICS_TOKEN = "secret-token";
+    Object.assign(process.env, R2_ENV, SUPABASE_ENV);
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      from: () => ({
+        select: () => ({
+          limit: () => Promise.resolve({ error: null }),
+        }),
+      }),
+    } as unknown as ReturnType<typeof getSupabaseAdminClient>);
+
+    const request = new NextRequest("http://localhost/api/diagnostics", {
+      headers: {
+        "x-request-id": "test-request-id",
+        "x-diagnostics-token": "secret-token",
+      },
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect([200, 503]).toContain(response.status);
+    expect(body.checks.env.detail).toBeUndefined();
+    expect(body.checks.supabase.detail).toBeUndefined();
+    expect(body.checks.r2.detail).toBeUndefined();
   });
 });

@@ -183,6 +183,7 @@ export function ExportPanel() {
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const batchAbortRef = useRef(false);
   const batchRequestAbortRef = useRef<AbortController | null>(null);
+  const approvalDecisionResolverRef = useRef<((shouldContinue: boolean) => void) | null>(null);
 
   const activeProfile = EXPORT_PROFILES[exportProfileId];
 
@@ -342,6 +343,13 @@ export function ExportPanel() {
     for (const s of subjects) queuePair(activeBackdrop.id, s.id, activeBackdrop.name, s.name);
   }
 
+  const waitForBatchApproval = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      approvalDecisionResolverRef.current = resolve;
+      setApprovalDialogOpen(true);
+    });
+  }, []);
+
   async function runBatchExport(): Promise<void> {
     if (isBatchRunning) return;
 
@@ -438,8 +446,21 @@ export function ExportPanel() {
 
           // Approval gate after first batch export
           if (exportCounter === 0 && exportedCount === 1 && !approvalGiven) {
-            setApprovalDialogOpen(true);
-            // Continue running — approval dialog is non-blocking for batch
+            const shouldContinue = await waitForBatchApproval();
+
+            if (!shouldContinue) {
+              batchAbortRef.current = true;
+
+              const pending = batchItems
+                .filter((q) => q.status === 'pending' || q.status === 'running')
+                .map((q) => q.id);
+              for (const id of pending) {
+                updateBatchItem(id, { status: 'cancelled', error: 'Cancelled by user.' });
+              }
+              break;
+            }
+
+            setApprovalGiven(true);
           }
         } catch (error) {
           batchRequestAbortRef.current = null;
@@ -650,7 +671,15 @@ export function ExportPanel() {
       </section>
 
       {/* Approval Gate Dialog */}
-      <Dialog open={approvalDialogOpen} onOpenChange={setApprovalDialogOpen}>
+      <Dialog
+        open={approvalDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && approvalDecisionResolverRef.current) {
+            return;
+          }
+          setApprovalDialogOpen(open);
+        }}
+      >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>First export complete</DialogTitle>
@@ -663,6 +692,11 @@ export function ExportPanel() {
               variant="outline"
               onClick={() => {
                 setApprovalDialogOpen(false);
+                if (approvalDecisionResolverRef.current) {
+                  approvalDecisionResolverRef.current(false);
+                  approvalDecisionResolverRef.current = null;
+                  return;
+                }
                 batchAbortRef.current = true;
                 batchRequestAbortRef.current?.abort();
               }}
@@ -671,6 +705,10 @@ export function ExportPanel() {
             </Button>
             <Button
               onClick={() => {
+                if (approvalDecisionResolverRef.current) {
+                  approvalDecisionResolverRef.current(true);
+                  approvalDecisionResolverRef.current = null;
+                }
                 setApprovalGiven(true);
                 setApprovalDialogOpen(false);
               }}
