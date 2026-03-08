@@ -72,10 +72,10 @@ export function generateBackdropKey(filename: string): string {
 }
 
 /**
- * `exports/{timestamp}-{sanitizedFilename}`
+ * `exports/{timestamp}-{nanoid(8)}-{sanitizedFilename}`
  */
 export function generateExportKey(filename: string): string {
-  return `exports/${Date.now()}-${sanitizeFilename(filename)}`;
+  return `exports/${Date.now()}-${nanoid(8)}-${sanitizeFilename(filename)}`;
 }
 
 // ---------------------------------------------------------------------------

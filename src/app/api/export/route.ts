@@ -10,6 +10,12 @@ import {
 import { getR2Env } from "@/lib/server/env";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
+import {
+  recordR2ObjectOwnership,
+  removeR2ObjectOwnership,
+  verifyR2ObjectOwnership,
+} from "@/lib/server/r2-ownership";
 import {
   EXPORT_WIDTH_PX,
   EXPORT_HEIGHT_PX,
@@ -26,6 +32,7 @@ export const maxDuration = 300;
 
 // Module-level cache — valid within a warm Vercel instance
 const backdropCache = new Map<string, Buffer>();
+const MANAGED_R2_PREFIXES = ["subjects/", "backdrops/", "exports/"] as const;
 
 // ---------------------------------------------------------------------------
 // Request interface
@@ -87,6 +94,26 @@ async function resolveImageBuffer(
   throw new Error(`Missing ${label}: provide r2Key or dataUrl.`);
 }
 
+async function assertR2Access(
+  key: string | undefined,
+  label: string,
+  sessionId: string,
+): Promise<void> {
+  if (!key) {
+    return;
+  }
+
+  const isManaged = MANAGED_R2_PREFIXES.some((prefix) => key.startsWith(prefix));
+  if (!isManaged) {
+    throw new Error(`${label} key must be within a managed prefix (subjects/, backdrops/, exports/).`);
+  }
+
+  const isOwned = await verifyR2ObjectOwnership(key, sessionId);
+  if (!isOwned) {
+    throw new Error(`${label} key is not accessible in this session.`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/export
 // ---------------------------------------------------------------------------
@@ -102,8 +129,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  let sessionState: { sessionId: string; isNew: boolean } | null = null;
+  const withSessionCookie = (response: NextResponse): NextResponse => {
+    if (sessionState) {
+      applySessionCookie(response, sessionState.sessionId, sessionState.isNew);
+    }
+    return response;
+  };
+
   try {
     const body = (await request.json()) as ExportRequest;
+    sessionState = await getOrCreateSessionId();
+
+    await Promise.all([
+      assertR2Access(body.subjectR2Key, "Subject", sessionState.sessionId),
+      assertR2Access(body.backdropR2Key, "Backdrop", sessionState.sessionId),
+    ]);
 
     // ── Resolve image buffers (R2 preferred, data URL fallback) ─────────────
     const backdropCacheKey = body.backdropR2Key;
@@ -177,7 +218,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const exportKey = generateExportKey(filename);
 
       try {
+        await recordR2ObjectOwnership(exportKey, sessionState.sessionId, "export");
+
         const putUrl = await getPresignedUploadUrl(exportKey, "image/png");
+        const downloadUrl = await getPresignedDownloadUrl(exportKey);
+
         const uploadResponse = await fetch(putUrl, {
           method: "PUT",
           body: new Uint8Array(result.buffer),
@@ -188,37 +233,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           throw new Error(`R2 upload failed (${uploadResponse.status}).`);
         }
 
-        const downloadUrl = await getPresignedDownloadUrl(exportKey);
-
-        return NextResponse.json({
+        return withSessionCookie(NextResponse.json({
           filename,
           downloadUrl,
           width: EXPORT_WIDTH_PX,
           height: EXPORT_HEIGHT_PX,
-        });
+        }));
       } catch (error) {
+        try {
+          await removeR2ObjectOwnership(exportKey, sessionState.sessionId);
+        } catch {
+          // best effort cleanup only
+        }
         console.error("[export] R2 upload failed, falling back to inline download:", error);
       }
     }
 
     // No R2 — inline base64 would exceed Vercel's 4.5MB response limit for 4K exports
     console.error('[export] R2 unavailable and inline fallback would exceed response size limit. R2 is required for 4000×5000 exports.');
-    return NextResponse.json(
+    return withSessionCookie(NextResponse.json(
       { error: 'Export storage unavailable. Please ensure R2 is configured or retry.', retryable: true },
       { status: 503 },
-    );
+    ));
   } catch (error) {
     if ((error as { isTimeout?: boolean }).isTimeout) {
-      return NextResponse.json(
+      return withSessionCookie(NextResponse.json(
         { error: "Export took too long. Try with a simpler composition or retry.", retryable: true },
         { status: 503 },
-      );
+      ));
     }
     const message = error instanceof Error ? error.message : "Unexpected export error.";
     const status =
       message.includes("Missing") || message.includes("Invalid data URL") ? 400
+      : message.includes("managed prefix") || message.includes("not accessible in this session") ? 403
       : message.includes("too large") || message.includes("image limits") ? 413
       : 500;
-    return NextResponse.json({ error: message }, { status });
+    return withSessionCookie(NextResponse.json({ error: message }, { status }));
   }
 }

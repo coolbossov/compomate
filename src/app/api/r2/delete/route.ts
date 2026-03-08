@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteR2Object } from "@/lib/server/r2";
 import { getR2Env } from "@/lib/server/env";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { getSessionIdFromCookie } from "@/lib/server/session-cookie";
+import { removeR2ObjectOwnership, verifyR2ObjectOwnership } from "@/lib/server/r2-ownership";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -53,9 +55,6 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   }
 
   // --- Key prefix guard: prevent arbitrary deletion ---
-  // SECURITY NOTE: Only prefix is validated here. Any caller who knows the key
-  // can delete/download any file. Full ownership enforcement requires a session→key
-  // binding table. Acceptable for single-operator use; harden before multi-tenant launch.
   const isAllowed = ALLOWED_PREFIXES.some((prefix) => key.startsWith(prefix));
   if (!isAllowed) {
     return NextResponse.json(
@@ -64,9 +63,36 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const sessionId = await getSessionIdFromCookie();
+  if (!sessionId) {
+    return NextResponse.json(
+      { error: "No session. Upload assets first to establish a session." },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const isOwned = await verifyR2ObjectOwnership(key, sessionId);
+    if (!isOwned) {
+      return NextResponse.json({ error: "Key is not accessible in this session." }, { status: 403 });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to validate key ownership.";
+    console.error("[r2/delete] Ownership check error:", key, message);
+    return NextResponse.json({ error: "Failed to validate key access." }, { status: 500 });
+  }
+
   // --- Delete ---
   try {
     await deleteR2Object(key);
+
+    try {
+      await removeR2ObjectOwnership(key, sessionId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown cleanup error.";
+      console.warn("[r2/delete] Ownership cleanup warning:", key, message);
+    }
+
     return NextResponse.json({ deleted: true, key });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete object.";

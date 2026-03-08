@@ -31,6 +31,18 @@ vi.mock("@/lib/server/rate-limit", () => ({
   requestIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+vi.mock("@/lib/server/session-cookie", () => ({
+  getOrCreateSessionId: vi.fn().mockResolvedValue({
+    sessionId: "session-test-123",
+    isNew: false,
+  }),
+  applySessionCookie: vi.fn(),
+}));
+
+vi.mock("@/lib/server/r2-ownership", () => ({
+  recordR2ObjectOwnership: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -38,6 +50,8 @@ vi.mock("@/lib/server/rate-limit", () => ({
 import { POST } from "./route";
 import { getR2Env } from "@/lib/server/env";
 import { checkRateLimit } from "@/lib/server/rate-limit";
+import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
+import { recordR2ObjectOwnership } from "@/lib/server/r2-ownership";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,6 +95,13 @@ describe("POST /api/r2/presign", () => {
       remaining: 10,
       resetAt: Date.now() + 60_000,
     });
+
+    vi.mocked(getOrCreateSessionId).mockResolvedValue({
+      sessionId: "session-test-123",
+      isNew: false,
+    });
+
+    vi.mocked(recordR2ObjectOwnership).mockResolvedValue(undefined);
   });
 
   it("returns 200 with uploadUrl, key, downloadUrl for valid request", async () => {
@@ -97,6 +118,12 @@ describe("POST /api/r2/presign", () => {
     expect(json.uploadUrl).toBeDefined();
     expect(json.key).toBeDefined();
     expect(json.downloadUrl).toBeDefined();
+    expect(recordR2ObjectOwnership).toHaveBeenCalledWith(
+      "subjects/mock-key.png",
+      "session-test-123",
+      "subject",
+    );
+    expect(applySessionCookie).toHaveBeenCalled();
   });
 
   it("returns 503 when R2 is not configured", async () => {
@@ -205,6 +232,23 @@ describe("POST /api/r2/presign", () => {
 
     expect(res.status).toBe(200);
     expect(json.key).toBeDefined();
+  });
+
+  it("returns 500 when ownership write fails", async () => {
+    vi.mocked(recordR2ObjectOwnership).mockRejectedValue(new Error("db write failed"));
+
+    const res = await POST(
+      createRequest({
+        filename: "photo.png",
+        contentType: "image/png",
+        purpose: "subject",
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error).toMatch(/failed|db/i);
+    expect(applySessionCookie).toHaveBeenCalled();
   });
 
   it("returns 403 for malformed Origin header", async () => {

@@ -162,6 +162,7 @@ export const DB_TABLES = {
   BACKDROPS: "compomate_backdrops",
   USAGE_LOGS: "compomate_usage_logs",
   PROJECTS: "compomate_projects", // legacy
+  R2_OBJECTS: "compomate_r2_objects",
 } as const;
 
 // --- Color Palette (CSS var references for use in Konva / canvas) ---

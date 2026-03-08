@@ -41,13 +41,34 @@ vi.mock("@/lib/server/rate-limit", () => ({
   requestIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+vi.mock("@/lib/server/session-cookie", () => ({
+  getOrCreateSessionId: vi.fn().mockResolvedValue({
+    sessionId: "session-test-123",
+    isNew: false,
+  }),
+  applySessionCookie: vi.fn(),
+}));
+
+vi.mock("@/lib/server/r2-ownership", () => ({
+  recordR2ObjectOwnership: vi.fn().mockResolvedValue(undefined),
+  removeR2ObjectOwnership: vi.fn().mockResolvedValue(undefined),
+  verifyR2ObjectOwnership: vi.fn().mockResolvedValue(true),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { POST } from "./route";
 import { runCompositorPipeline } from "@/lib/compositing/pipeline";
+import { getPresignedDownloadUrl } from "@/lib/server/r2";
 import { checkRateLimit } from "@/lib/server/rate-limit";
+import { getOrCreateSessionId } from "@/lib/server/session-cookie";
+import {
+  recordR2ObjectOwnership,
+  removeR2ObjectOwnership,
+  verifyR2ObjectOwnership,
+} from "@/lib/server/r2-ownership";
 import type { CompositionState } from "@/lib/shared/composition";
 
 // ---------------------------------------------------------------------------
@@ -144,6 +165,16 @@ describe("POST /api/export", () => {
       remaining: 10,
       resetAt: Date.now() + 60_000,
     });
+
+    vi.mocked(getOrCreateSessionId).mockResolvedValue({
+      sessionId: "session-test-123",
+      isNew: false,
+    });
+
+    vi.mocked(verifyR2ObjectOwnership).mockResolvedValue(true);
+    vi.mocked(recordR2ObjectOwnership).mockResolvedValue(undefined);
+    vi.mocked(removeR2ObjectOwnership).mockResolvedValue(undefined);
+    vi.mocked(getPresignedDownloadUrl).mockResolvedValue("https://r2.test/download/mock.png");
   });
 
   afterEach(() => {
@@ -248,5 +279,122 @@ describe("POST /api/export", () => {
     expect(callArgs.outputHeight).toBe(5000);
     expect(callArgs.subjectBuffer).toBeInstanceOf(Buffer);
     expect(callArgs.backdropBuffer).toBeInstanceOf(Buffer);
+  });
+
+  it("returns 403 when subjectR2Key is not owned by current session", async () => {
+    vi.mocked(verifyR2ObjectOwnership).mockResolvedValue(false);
+
+    const res = await POST(
+      createRequest(
+        validBody({
+          subjectDataUrl: undefined,
+          subjectR2Key: "subjects/owned-by-other-session.png",
+        }),
+      ),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(json.error).toMatch(/not accessible in this session/i);
+  });
+
+  it("records ownership for generated export keys", async () => {
+    const res = await POST(createRequest(validBody()));
+    expect(res.status).toBe(200);
+    expect(recordR2ObjectOwnership).toHaveBeenCalledWith(
+      "exports/mock-key.png",
+      "session-test-123",
+      "export",
+    );
+  });
+
+  it("returns 403 for unowned backdropR2Key", async () => {
+    vi.mocked(verifyR2ObjectOwnership)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const body = validBody({
+      subjectDataUrl: undefined,
+      backdropDataUrl: undefined,
+      subjectR2Key: "subjects/subject-owned.png",
+      backdropR2Key: "backdrops/other-session.png",
+    });
+
+    const res = await POST(createRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(json.error).toMatch(/not accessible in this session/i);
+  });
+
+  it("returns 403 for key outside managed prefixes", async () => {
+    const body = validBody({
+      subjectDataUrl: undefined,
+      subjectR2Key: "private/not-allowed.png",
+    });
+
+    const res = await POST(createRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(json.error).toMatch(/managed prefix/i);
+  });
+
+  it("returns 503 when ownership write fails before upload", async () => {
+    vi.mocked(recordR2ObjectOwnership).mockRejectedValue(new Error("ownership insert failed"));
+
+    const res = await POST(createRequest(validBody()));
+    const json = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(json.retryable).toBe(true);
+  });
+
+  it("returns 500 when ownership lookup throws", async () => {
+    vi.mocked(verifyR2ObjectOwnership).mockRejectedValue(new Error("lookup failed"));
+
+    const body = validBody({
+      subjectDataUrl: undefined,
+      subjectR2Key: "subjects/mock-key.png",
+    });
+
+    const res = await POST(createRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error).toMatch(/lookup failed/i);
+  });
+
+  it("succeeds for owned subjectR2Key and backdropR2Key", async () => {
+    const body = validBody({
+      subjectDataUrl: undefined,
+      backdropDataUrl: undefined,
+      subjectR2Key: "subjects/subject-owned.png",
+      backdropR2Key: "backdrops/backdrop-owned.png",
+    });
+
+    const res = await POST(createRequest(body));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.downloadUrl).toBeDefined();
+    expect(verifyR2ObjectOwnership).toHaveBeenCalledWith("subjects/subject-owned.png", "session-test-123");
+    expect(verifyR2ObjectOwnership).toHaveBeenCalledWith("backdrops/backdrop-owned.png", "session-test-123");
+  });
+
+  it("cleans ownership metadata when upload fails after ownership record", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 500 }));
+
+    const res = await POST(createRequest(validBody()));
+    const json = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(json.retryable).toBe(true);
+    expect(recordR2ObjectOwnership).toHaveBeenCalledWith(
+      "exports/mock-key.png",
+      "session-test-123",
+      "export",
+    );
+    expect(removeR2ObjectOwnership).toHaveBeenCalledWith("exports/mock-key.png", "session-test-123");
   });
 });

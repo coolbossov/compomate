@@ -6,6 +6,78 @@
 
 ---
 
+## [Unreleased] — 2026-03-08 — R2 Ownership Enforcement + Export Access Hardening
+
+### Summary
+Implemented session-bound R2 ownership enforcement for presign/download/delete and export source reads, then expanded API test coverage and ran multi-agent QA.
+
+### Security / Access Control Changes
+- Added new ownership metadata table migration:
+  - `supabase/migrations/20260309_create_compomate_r2_objects.sql`
+  - Table: `compomate_r2_objects (key, session_id, purpose, created_at)`
+  - Indexes on `session_id`, `created_at`
+  - RLS enabled with `service_role_all` policy
+- Added shared session cookie helper:
+  - `src/lib/server/session-cookie.ts`
+  - Standardizes `compomate-session-id` get/create + cookie application
+- Added ownership helper module:
+  - `src/lib/server/r2-ownership.ts`
+  - `recordR2ObjectOwnership`, `verifyR2ObjectOwnership`, `removeR2ObjectOwnership`
+- Added `DB_TABLES.R2_OBJECTS` constant in `src/lib/constants.ts`
+
+### Route Hardening
+- `src/app/api/r2/presign/route.ts`
+  - Binds each generated key to current session via ownership table
+  - Applies session cookie consistently
+- `src/app/api/r2/download/route.ts`
+  - Requires session cookie
+  - Enforces ownership check before issuing download URL
+- `src/app/api/r2/delete/route.ts`
+  - Requires session cookie
+  - Enforces ownership check before delete
+  - Performs best-effort ownership metadata cleanup after delete
+- `src/app/api/export/route.ts`
+  - Enforces ownership checks for `subjectR2Key` and `backdropR2Key`
+  - Enforces managed prefix guard for R2 keys used by export
+  - Records ownership for generated export keys
+  - Cleans ownership metadata on upload-stage failure (best effort)
+  - Applies session cookie on export responses
+
+### R2 Key Generation
+- `src/lib/server/r2.ts`
+  - `generateExportKey()` now includes `nanoid(8)` to reduce collision risk:
+    - from: `exports/{timestamp}-{filename}`
+    - to: `exports/{timestamp}-{nanoid}-{filename}`
+
+### Tests Added/Updated
+- Updated: `src/app/api/r2/presign/route.test.ts`
+- Added: `src/app/api/r2/download/route.test.ts`
+- Added: `src/app/api/r2/delete/route.test.ts`
+- Updated: `src/app/api/export/route.test.ts`
+- New assertions cover:
+  - missing session, unowned keys, ownership lookup failure, prefix rejection
+  - export ownership write behavior
+  - export cleanup path on upload failure
+  - owned `subjectR2Key` + `backdropR2Key` success path
+
+### Verification
+- `npm test -- src/app/api/export/route.test.ts src/app/api/r2` → pass (44/44)
+- `npm test` → pass (312/312)
+- `npm run build` → pass
+- `npm run lint` → **fails due pre-existing repo issue** in `src/components/panels/NameEntryPanel.tsx:69` (`react-hooks/set-state-in-effect`) + existing warnings
+- `npx supabase db push` → applied `20260309_create_compomate_r2_objects.sql`
+- `npx supabase migration list` → local and remote aligned through `20260309`
+
+### Multi-Agent QA (post-change)
+- Correctness QA: no critical/high blockers for single-user internal use
+- Security QA: internal single-user use acceptable; public unauthenticated deployment still needs auth/distributed rate-limit hardening
+- Test QA: confidence improved; no critical blind spots for current ownership paths
+
+### Deployment Note
+- Supabase MCP timed out during this session, but migration was successfully applied via CLI (`npx supabase db push`).
+
+---
+
 ## [Deployment] — 2026-03-07 — Production Infrastructure Setup
 
 ### Supabase

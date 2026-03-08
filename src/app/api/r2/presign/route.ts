@@ -13,6 +13,8 @@ import {
 } from "@/lib/server/r2";
 import { getR2Env } from "@/lib/server/env";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
+import { recordR2ObjectOwnership } from "@/lib/server/r2-ownership";
 
 export const runtime = "nodejs";
 export const maxDuration = 30; // Fluid Compute
@@ -96,6 +98,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const normalizedPurpose = purpose as Purpose;
+  const { sessionId, isNew } = await getOrCreateSessionId();
 
   // --- Content type validation (images only for subject/backdrop) ---
   if (normalizedPurpose !== "export" && !ALLOWED_IMAGE_TYPES.has(contentType)) {
@@ -123,15 +126,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // --- Generate presigned URLs ---
   try {
+    await recordR2ObjectOwnership(key, sessionId, normalizedPurpose);
+
     const [uploadUrl, downloadUrl] = await Promise.all([
       getPresignedUploadUrl(key, contentType),
       getPresignedDownloadUrl(key),
     ]);
 
-    return NextResponse.json({ uploadUrl, key, downloadUrl });
+    const response = NextResponse.json({ uploadUrl, key, downloadUrl });
+    applySessionCookie(response, sessionId, isNew);
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate presigned URL.";
     console.error("[r2/presign] Error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const response = NextResponse.json({ error: message }, { status: 500 });
+    applySessionCookie(response, sessionId, isNew);
+    return response;
   }
 }

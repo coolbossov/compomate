@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPresignedDownloadUrl } from "@/lib/server/r2";
 import { getR2Env } from "@/lib/server/env";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
+import { getSessionIdFromCookie } from "@/lib/server/session-cookie";
+import { verifyR2ObjectOwnership } from "@/lib/server/r2-ownership";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -28,15 +30,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "key is required." }, { status: 400 });
   }
 
-  // SECURITY NOTE: Only prefix is validated here. Any caller who knows the key
-  // can delete/download any file. Full ownership enforcement requires a session→key
-  // binding table. Acceptable for single-operator use; harden before multi-tenant launch.
   const isAllowed = ALLOWED_PREFIXES.some((prefix) => key.startsWith(prefix));
   if (!isAllowed) {
     return NextResponse.json(
       { error: "Key must be within a managed prefix (subjects/, backdrops/, exports/)." },
       { status: 403 },
     );
+  }
+
+  const sessionId = await getSessionIdFromCookie();
+  if (!sessionId) {
+    return NextResponse.json(
+      { error: "No session. Upload assets first to establish a session." },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const isOwned = await verifyR2ObjectOwnership(key, sessionId);
+    if (!isOwned) {
+      return NextResponse.json({ error: "Key is not accessible in this session." }, { status: 403 });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to validate key ownership.";
+    console.error("[r2/download] Ownership check error:", key, message);
+    return NextResponse.json({ error: "Failed to validate key access." }, { status: 500 });
   }
 
   try {
