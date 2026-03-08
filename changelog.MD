@@ -6,6 +6,42 @@
 
 ---
 
+## [Deployment] — 2026-03-07 — Production Infrastructure Setup
+
+### Supabase
+- Project created: `compomate` — ref `dlaaibvipvevtwolpdua`, region `us-east-1`
+- DB password stored in `~/.claude/guidance/infra.md` + Backup folder
+- Migrations applied:
+  - `20260306_create_compomate_projects.sql` ✓
+  - `20260307_compomate_full_schema.sql` ✓ (templates + sessions)
+  - `20260307_create_compomate_templates.sql` — deleted (duplicate version key; full_schema covers it)
+  - `20260308_add_session_id_to_projects.sql` ✓
+- Project URL: `https://dlaaibvipvevtwolpdua.supabase.co`
+
+### Cloudflare R2
+- Bucket `compomate-uploads` confirmed exists (same account as SAPD)
+- Credentials: same R2 access key as SAPD (account-level), bucket name differs
+
+### Vercel
+- Project: `compomate` — ID `prj_RBAWgaqCRkd6rG6gMJvtZk0XDnGv`
+- Production URL: `https://compomate.vercel.app`
+- Env vars set (all environments: production, preview, development):
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `R2_ACCESS_KEY_ID`
+  - `R2_SECRET_ACCESS_KEY`
+  - `R2_BUCKET_NAME` = `compomate-uploads`
+  - `R2_ACCOUNT_ID`
+  - `R2_ENDPOINT`
+- Redeploy triggered to pick up new env vars
+
+### Commits
+- `a9ac789` — 19-issue implementation pass
+- `f45a8e3` — fix: remove redundant templates migration
+
+---
+
 ## [Unreleased] — 2026-03-07 — 19-Issue Implementation Pass (Claude claude-sonnet-4-6)
 
 ### Summary
