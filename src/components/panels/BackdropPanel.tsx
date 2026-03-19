@@ -16,7 +16,7 @@ import {
   r2KeyToAsset,
   r2KeyToBackdropAsset,
 } from '@/lib/client/utils';
-import { uploadBlobToR2 } from '@/lib/client/uploader';
+import { uploadBlobToR2, uploadFileToR2 } from '@/lib/client/uploader';
 import {
   BACKDROP_POLL_INTERVAL_MS,
   BACKDROP_MAX_POLLS,
@@ -84,11 +84,14 @@ export function BackdropPanel() {
   const [isGeneratingIdeogram, setIsGeneratingIdeogram] = useState(false);
 
   // ----- Reference Photo tab state -----
-  const [refPhotoDataUrl, setRefPhotoDataUrl] = useState<string | null>(null);
+  const [refPhotoPreviewUrl, setRefPhotoPreviewUrl] = useState<string | null>(null);
   const [refPhotoName, setRefPhotoName] = useState<string>('');
+  const [refPhotoR2Key, setRefPhotoR2Key] = useState<string | null>(null);
+  const [isUploadingRefPhoto, setIsUploadingRefPhoto] = useState(false);
   const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
   const [refGeneratedPrompt, setRefGeneratedPrompt] = useState('');
   const [isGeneratingFromRef, setIsGeneratingFromRef] = useState(false);
+  const refPhotoPreviewUrlRef = useRef<string | null>(null);
 
   // ----- Projects (Supabase) state (unchanged) -----
   const [projectName, setProjectName] = useState('Session');
@@ -102,6 +105,15 @@ export function BackdropPanel() {
   useEffect(() => {
     void refreshProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (refPhotoPreviewUrlRef.current) {
+        URL.revokeObjectURL(refPhotoPreviewUrlRef.current);
+        refPhotoPreviewUrlRef.current = null;
+      }
+    };
   }, []);
 
   // ----- Store selectors for snapshot -----
@@ -305,25 +317,44 @@ export function BackdropPanel() {
       const file = input.files?.[0];
       input.remove();
       if (!file) return;
+
+      const previewUrl = URL.createObjectURL(file);
+      if (refPhotoPreviewUrlRef.current) {
+        URL.revokeObjectURL(refPhotoPreviewUrlRef.current);
+      }
+      refPhotoPreviewUrlRef.current = previewUrl;
+      setRefPhotoPreviewUrl(previewUrl);
+      setRefPhotoName(file.name);
+      setRefPhotoR2Key(null);
+      setRefGeneratedPrompt('');
+      setIsUploadingRefPhoto(true);
+
       try {
-        const dataUrl = await fileToDataUrl(file);
-        setRefPhotoDataUrl(dataUrl);
-        setRefPhotoName(file.name);
-      } catch {
-        showToast('Failed to read reference photo.');
+        const { key } = await uploadFileToR2(file, 'backdrop');
+        setRefPhotoR2Key(key);
+        showToast('Reference photo uploaded. Ready to analyze.');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to upload reference photo.';
+        showToast(message);
+      } finally {
+        setIsUploadingRefPhoto(false);
       }
     };
     document.body.append(input); input.click();
   }
 
   async function analyzeReferencePhoto(): Promise<void> {
-    if (!refPhotoDataUrl) { showToast('Upload a reference photo first.'); return; }
+    if (!refPhotoR2Key) {
+      showToast(isUploadingRefPhoto ? 'Reference photo is still uploading.' : 'Upload a reference photo first.');
+      return;
+    }
+
     setIsAnalyzingRef(true);
     try {
       const res = await fetch('/api/analyze-reference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageDataUrl: refPhotoDataUrl }),
+        body: JSON.stringify({ r2Key: refPhotoR2Key }),
       });
       if (!res.ok) { const text = await res.text(); throw new Error(parseErrorText(text)); }
       const { prompt } = (await res.json()) as { prompt: string };
@@ -693,15 +724,17 @@ export function BackdropPanel() {
               role="button"
               aria-label="Upload reference photo"
             >
-              {refPhotoDataUrl ? (
+              {refPhotoPreviewUrl ? (
                 <div className="space-y-1">
                   <img
-                    src={refPhotoDataUrl}
+                    src={refPhotoPreviewUrl}
                     alt="Reference"
                     className="mx-auto max-h-32 rounded object-contain"
                   />
                   <p className="text-[10px] text-[var(--text-soft)] truncate">{refPhotoName}</p>
-                  <p className="text-[10px] text-[#6367FF]">Click to change</p>
+                  <p className="text-[10px] text-[#6367FF]">
+                    {isUploadingRefPhoto ? 'Uploading…' : refPhotoR2Key ? 'Ready to analyze' : 'Click to change'}
+                  </p>
                 </div>
               ) : (
                 <p className="text-xs text-[var(--text-soft)]">Click to upload reference photo</p>
@@ -711,10 +744,14 @@ export function BackdropPanel() {
             <button
               className="btn-secondary w-full"
               type="button"
-              disabled={!refPhotoDataUrl || isAnalyzingRef}
+              disabled={!refPhotoR2Key || isUploadingRefPhoto || isAnalyzingRef}
               onClick={() => { void analyzeReferencePhoto(); }}
             >
-              {isAnalyzingRef ? (
+              {isUploadingRefPhoto ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading reference photo…
+                </span>
+              ) : isAnalyzingRef ? (
                 <span className="flex items-center justify-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing with Gemini…
                 </span>

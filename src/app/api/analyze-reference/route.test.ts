@@ -14,12 +14,27 @@ vi.mock("@/lib/server/rate-limit", () => ({
   requestIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+vi.mock("@/lib/server/session-cookie", () => ({
+  getSessionIdFromCookie: vi.fn().mockResolvedValue("session-123"),
+}));
+
+vi.mock("@/lib/server/r2-ownership", () => ({
+  verifyR2ObjectOwnership: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("@/lib/server/r2", () => ({
+  getPresignedDownloadUrl: vi.fn().mockResolvedValue("https://r2.example.com/reference.jpg"),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { POST } from "./route";
 import { checkRateLimit } from "@/lib/server/rate-limit";
+import { getSessionIdFromCookie } from "@/lib/server/session-cookie";
+import { verifyR2ObjectOwnership } from "@/lib/server/r2-ownership";
+import { getPresignedDownloadUrl } from "@/lib/server/r2";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,6 +72,10 @@ describe("POST /api/analyze-reference", () => {
       resetAt: Date.now() + 60_000,
     });
 
+    vi.mocked(getSessionIdFromCookie).mockResolvedValue("session-123");
+    vi.mocked(verifyR2ObjectOwnership).mockResolvedValue(true);
+    vi.mocked(getPresignedDownloadUrl).mockResolvedValue("https://r2.example.com/reference.jpg");
+
     // Default mock: Gemini returns a valid prompt
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(
@@ -92,12 +111,66 @@ describe("POST /api/analyze-reference", () => {
     expect(json.prompt.length).toBeGreaterThan(0);
   });
 
-  it("returns 400 when imageDataUrl is missing", async () => {
+  it("returns 400 when both imageDataUrl and r2Key are missing", async () => {
     const res = await POST(createRequest({}));
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/imageDataUrl/i);
+    expect(json.error).toMatch(/imageDataUrl|r2Key/i);
+  });
+
+  it("returns 200 with prompt when r2Key is valid and owned", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: "A cinematic dark backdrop with haze and rim light." }],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const res = await POST(createRequest({ r2Key: "backdrops/ref-photo.jpg" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(typeof json.prompt).toBe("string");
+    expect(json.prompt.length).toBeGreaterThan(0);
+    expect(verifyR2ObjectOwnership).toHaveBeenCalledWith("backdrops/ref-photo.jpg", "session-123");
+    expect(getPresignedDownloadUrl).toHaveBeenCalledWith("backdrops/ref-photo.jpg");
+  });
+
+  it("returns 401 for r2Key flow when session cookie is missing", async () => {
+    vi.mocked(getSessionIdFromCookie).mockResolvedValueOnce(null);
+
+    const res = await POST(createRequest({ r2Key: "backdrops/ref-photo.jpg" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toMatch(/session/i);
+  });
+
+  it("returns 403 when r2 key is not owned by the current session", async () => {
+    vi.mocked(verifyR2ObjectOwnership).mockResolvedValueOnce(false);
+
+    const res = await POST(createRequest({ r2Key: "backdrops/ref-photo.jpg" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(json.error).toMatch(/owned|session/i);
   });
 
   it("returns 400 when MIME type is invalid (text/html)", async () => {

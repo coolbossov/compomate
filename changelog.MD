@@ -6,6 +6,36 @@
 
 ---
 
+## [Unreleased] — 2026-03-08 — Robust Reference Analysis (R2-backed)
+
+### Summary
+Switched reference-photo analysis from client data-URL payloads to session-owned R2 object reads so full-resolution images can be analyzed reliably without request-size failures.
+
+### Added
+- `src/app/api/analyze-reference/route.ts`
+  - Added `r2Key` request path with session-cookie + ownership enforcement (`verifyR2ObjectOwnership`).
+  - Added server-side image fetch from presigned R2 download URL (`getPresignedDownloadUrl`).
+  - Added R2 key prefix guard (`backdrops/`, `subjects/`).
+  - Added max binary size guard for reference analysis (`15 MB`) and structured route-level error mapping.
+
+### Changed
+- `src/components/panels/BackdropPanel.tsx`
+  - Reference-photo picker now uploads selected photo to R2 immediately (`uploadFileToR2`) and stores `r2Key`.
+  - Analyze action now sends `{ r2Key }` instead of a large `imageDataUrl` payload.
+  - Added explicit upload state (`isUploadingRefPhoto`) with UX messaging (`Uploading…`, `Ready to analyze`).
+  - Added preview object-URL lifecycle cleanup to prevent leaked blob URLs.
+
+- `src/app/api/analyze-reference/route.test.ts`
+  - Added mocks for session/ownership/R2 helpers.
+  - Added r2Key success test and r2Key auth/ownership failure tests (`401`, `403`).
+  - Updated missing-input assertion to require either `imageDataUrl` or `r2Key`.
+
+### Verification
+- `npm test -- src/app/api/analyze-reference/route.test.ts` → pass (10/10)
+- `npm run build` → pass
+
+---
+
 ## [Unreleased] — 2026-03-08 — R2 Ownership Enforcement + Export Access Hardening
 
 ### Summary
