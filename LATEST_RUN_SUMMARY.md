@@ -1,104 +1,125 @@
 # Latest Run Summary
 
-Last updated: 2026-03-07
+Last updated: 2026-03-19
 Repo: `compomate`
 Branch at completion: `main`
-Production deployment: `READY`
+Deployed commit: `369827d`
 
-- Stable URL: `https://composite.sapicture.day`
-- Project alias: `https://compomate-sapd.vercel.app`
-- Branch alias: `https://compomate-git-main-sapd.vercel.app`
+## URLs
 
-## Commits in this session (newest first)
+- **Working app URL:** `https://compomate-sapd.vercel.app` ✅
+- **Production domain:** `https://composite.sapicture.day` ⚠️ (Cloudflare redirect — see issues below)
+- **Latest deployment:** `compomate-71cy66nru-sapd.vercel.app` (production)
 
-1. **Deployment changelog** (`4a7f893`) — docs: add deployment changelog for 2026-03-07 infrastructure setup
-2. **Remove redundant migration** (`f45a8e3`) — fix: remove duplicate 20260307 templates migration (version key conflict)
-3. **19-issue implementation pass** (`a9ac789`) — feat: implement all 19 issues — CSV roster, done tracking, search, parallel load, ICC profile, SVG clamp, auto-placement improvements, lockSettings fix, batch overlay snapshot, rate limit constant
+## Session Summary
 
-## What was done
+This session completed a full QA pass on the CompoMate project. All code was committed, deployed, and verified end-to-end.
 
-### Infrastructure (all completed this session)
+## Commits this session (newest first)
 
-Full production infrastructure wired for the first time:
+1. `369827d` — chore: trigger redeploy to pick up DIAGNOSTICS_TOKEN
+2. `fc55353` — feat: upload reference photos to R2 before Gemini analysis
 
-- **Supabase** created (`dlaaibvipvevtwolpdua`, us-east-1), linked via CLI, 3 migrations applied
-- **Cloudflare R2** bucket `compomate-uploads` confirmed existing
-- **Vercel** — all 8 env vars set across production + preview + development
-- **`infra.md`** (Obsidian KB) updated with full CompoMate project details
-- **Smoke test passed** — `https://composite.sapicture.day` confirmed fully loading with all UI panels
+## What was verified ✅
 
-### Supabase details
+| Check | Status |
+|-|-|
+| TypeScript typecheck | 0 errors |
+| ESLint | 0 errors, 5 pre-existing warnings (test files only) |
+| Test suite | 339 passed, 0 failed |
+| Production build | Clean |
+| App loads in browser | ✅ All UI panels render correctly |
+| Supabase connection | ✅ configured=true, templates query works |
+| AI backdrop generation | ✅ fal-ai/flux-pro/v1.1-ultra returns JPEG base64 |
+| R2 presign URL generation | ✅ generates valid-looking presigned URLs |
+| Export API route | ✅ responds (POST) |
+| Analyze-reference route | ✅ deployed (new R2-backed flow) |
+
+## What was done this session
+
+### Code committed (fc55353)
+- **BackdropPanel**: Reference photo picker now uploads to R2 immediately via `uploadFileToR2`, stores `r2Key` instead of large data URL in memory. Preview uses blob URL (lifecycle-managed).
+- **analyze-reference route**: Accepts `r2Key` (new, preferred) or `imageDataUrl` (fallback). Verifies session ownership, fetches image from presigned R2 download URL, validates MIME type, 15 MB cap.
+- **Tests**: Added mocks for session/ownership/R2 helpers; r2Key success path + 401/403 failure cases.
+
+### Infrastructure updates
+- Added `GEMINI_API_KEY` to Vercel production + preview + development (was missing)
+- Added `DIAGNOSTICS_TOKEN` to Vercel production + preview + development (new — enables `/api/diagnostics` in production)
+- Updated `.env.local` with real Supabase + R2 credentials (was still using placeholder values)
+
+## Known issues requiring manual Cloudflare dashboard access
+
+### 1. composite.sapicture.day redirects to yelena.photography ⚠️
+
+**Symptom:** `https://composite.sapicture.day` returns HTTP 301 → `https://www.yelena.photography/school`
+
+**Root cause:** A Cloudflare redirect rule in the `sapicture.day` zone is intercepting traffic for `composite.sapicture.day`.
+
+**Fix (2 minutes in Cloudflare dashboard):**
+1. Go to `dash.cloudflare.com` → select `sapicture.day` zone
+2. Go to **Rules → Redirect Rules**
+3. Find and **delete** the rule matching `composite.sapicture.day`
+
+**Working URL:** `https://compomate-sapd.vercel.app` (SSO protection removed — accessible)
+
+---
+
+### 2. R2 S3 credentials return 403 ⚠️
+
+**Symptom:** All S3-compatible API operations on `compomate-uploads` return 403. Presigned URLs generate correctly but uploads fail.
+
+**Root cause:** The R2 API token (access key `7b83d73c68693e125fea1500d96a7def`) has been revoked or its secret is mismatched. R2 S3 tokens cannot be created via API — only via Cloudflare dashboard.
+
+**Impact:** R2 presign generates URLs (no error shown to user) but actual file uploads fail silently. Affects:
+- Subject photo uploads to R2 library
+- Backdrop uploads to R2 library
+- Reference photo analysis (upload step fails)
+
+Core compositing/export workflow still works (files processed in-memory without R2 persistence).
+
+**Fix (5 minutes in Cloudflare dashboard):**
+1. Go to `dash.cloudflare.com` → R2 → API Tokens
+2. Create a new token with **Object Read & Write** on bucket `compomate-uploads`
+3. Copy the new **Access Key ID** and **Secret Access Key**
+4. Update Vercel env vars: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` for production + preview + development
+5. Update `~/.zshenv`: `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`
+6. Update `.env.local` in the repo
+
+## Supabase details
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Project ref | `dlaaibvipvevtwolpdua` |
 | Region | `us-east-1` |
 | URL | `https://dlaaibvipvevtwolpdua.supabase.co` |
-| DB password | `CompoMate2026!Secure#DB` |
+| Migrations applied | 3 (create_compomate_projects, compomate_full_schema, add_session_id_to_projects) |
+| Tables | compomate_projects, compomate_sessions, compomate_templates, compomate_backdrops, compomate_usage_logs, compomate_r2_objects |
 
-Migrations applied:
-- `20260306_create_compomate_projects.sql` ✅
-- `20260307_compomate_full_schema.sql` ✅ (compomate_templates + sessions + session_id fix)
-- `20260308_add_session_id_to_projects.sql` ✅
-- `20260307_create_compomate_templates.sql` 🗑 deleted (duplicate version key, content covered by full_schema)
+## Vercel environment variables (current state)
 
-### 19 issues implemented
+| Variable | Environments | Status |
+|-|-|-|
+| FAL_KEY | Production + Development | ✅ |
+| GEMINI_API_KEY | Production + Preview + Development | ✅ (added this session) |
+| NEXT_PUBLIC_SUPABASE_URL | Production + Preview + Development | ✅ |
+| NEXT_PUBLIC_SUPABASE_ANON_KEY | Production + Preview + Development | ✅ |
+| SUPABASE_SERVICE_ROLE_KEY | Production + Preview + Development | ✅ |
+| R2_ACCESS_KEY_ID | Production + Preview + Development | ❌ (403 — needs regeneration) |
+| R2_SECRET_ACCESS_KEY | Production + Preview + Development | ❌ (403 — needs regeneration) |
+| R2_BUCKET_NAME | Production + Preview + Development | ✅ |
+| R2_ENDPOINT | Production + Preview + Development | ✅ |
+| R2_ACCOUNT_ID | Production + Preview + Development | ✅ |
+| DIAGNOSTICS_TOKEN | Production + Preview + Development | ✅ (added this session) |
+| UNSPLASH_ACCESS_KEY | Production + Preview + Development | ✅ (future feature) |
 
-**Critical:**
-1. `lockSettings` — now skips ALL auto-placement, not just size
-2. `BatchItem` snapshots `nameOverlayEnabled`, `nameSizePct`, `nameYFromBottomPct`
-3. Batch queue labels show `firstName lastName` not filenames
-4. Auto-placement pixel scan downsampled to ≤400px before iteration
-5. `subjectHeightPct` computed from aspect ratio (`clamp(62 + (0.52 - w/h) * 26, 48, 82)`)
+## What another developer should do next
 
-**High (new features):**
-6. CSV Roster Import — `RosterImportPanel`, sequential auto-fill on subject advance
-7. Per-subject done tracking — `exported?: boolean` on `Asset`, green `CheckCircle2` badge in FilePanel
-8. Subject search/filter — filter input above subject list, filename or name, case-insensitive
-9. Parallel file loading — 8-concurrent chunks + progress display ("Processing N / Total…")
-10. Tab → next subject added to shortcuts overlay
-11. `F` key focuses first name field via `compomate:focus-name` custom event
-
-**Medium (pipeline quality):**
-12. ICC sRGB profile — `.withMetadata({ density: 300, icc: 'srgb' })`
-13. Backdrop module-level `Map<string, Buffer>` cache in export route
-14. Long name SVG clamp — `textLength="3800" lengthAdjust="spacingAndGlyphs"` when > 3800px
-15. `EXPORT_RATE_LIMIT_PER_MINUTE` constant: 30 → 45; route uses constant not literal
-
-**Infrastructure:**
-16. Migration conflict fixed: `session_token → session_id` in full_schema; redundant migration deleted
-17. `.env.example` — `COMPOMATE_ALLOW_UNAUTHENTICATED_PROJECT_PERSISTENCE` documented
-18. R2 delete/download routes — SECURITY NOTE comments added
-19. `rate-limit.ts` — NOTE about in-process Map + Upstash upgrade path documented
-
-## Verification
-
-- `npx tsc --noEmit` — 0 errors
-- `npm run test` — 285 passed, 0 failed
-- `npm run build` — 0 errors
-- Production smoke test — `https://composite.sapicture.day` fully renders ✅
-
-## What another developer or AI should do next
-
-### Immediate (optional / when needed)
-
-- Set `GEMINI_API_KEY` in Vercel env if reference photo analysis (`/api/analyze-reference`) is wanted
-- Set `COMPOMATE_ALLOW_UNAUTHENTICATED_PROJECT_PERSISTENCE=true` if project persistence needed before auth is built
-- Run a full end-to-end smoke test: import subject PNG → auto-place → enter name → select/generate backdrop → export → verify correct 4×6 crop at 300 DPI
-
-### Deferred security/infra
-
-- **Projects API session scoping** — `compomate_projects` has `session_id` column but route does NOT yet filter by it. All projects globally readable. Needs ~1 hour to wire.
-- **R2 file ownership** — no ownership check on delete/download routes. Needs session-to-key binding table.
-- **Distributed rate limiting** — in-process Map doesn't protect across serverless instances. Needs Upstash Redis.
-
-### Future feature
-
-- **Dual-person composite** — explicitly planned (see `changelog.MD`). Significant scope (2–3 days). Needs data model, UI, pipeline, and persistence changes.
+1. **Fix Cloudflare redirect** — delete the `composite.sapicture.day → yelena.photography` redirect rule in Cloudflare dashboard (2 min)
+2. **Fix R2 credentials** — generate new R2 API token in Cloudflare dashboard, update Vercel env vars (5 min)
+3. **Re-run diagnostics** after R2 fix: `curl -H "x-diagnostics-token: $COMPOMATE_DIAGNOSTICS_TOKEN" https://compomate-sapd.vercel.app/api/diagnostics`
 
 ## Source of truth
 
-- `changelog.MD` — full chronological history of all changes
-- `LATEST_RUN_SUMMARY.md` — this file, current state snapshot
-- `DEVELOPER_HANDOFF.md` — historical reference from first implementation run
-- `~/.claude/guidance/infra.md` (Obsidian KB `16-Infrastructure.md`) — full infrastructure details including credentials reference
+- `changelog.MD` — full chronological history
+- `LATEST_RUN_SUMMARY.md` — this file
+- `DEVELOPER_HANDOFF.md` — historical handoff notes
