@@ -14,4 +14,13 @@ export function initPostHog() {
   initialized = true;
 }
 
+/**
+ * Fire a PostHog event. Safe to call even if PostHog is not initialised —
+ * it will silently no-op when the key is absent or the SDK is not yet ready.
+ */
+export function captureEvent(event: string, properties?: Record<string, unknown>): void {
+  if (typeof window === 'undefined' || !initialized) return;
+  posthog.capture(event, properties);
+}
+
 export { posthog };

@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { NextRequest, NextResponse } from "next/server";
 
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const requestId = request.headers.get("x-request-id") ?? nanoid(16);
 
   const requestHeaders = new Headers(request.headers);

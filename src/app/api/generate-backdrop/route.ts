@@ -256,7 +256,7 @@ function getFalKey(): string {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`fal:poll:${ip}`, 180, 60_000);
+  const limit = await checkRateLimit(`fal:poll:${ip}`, 180, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Rate limit reached for polling. Please slow down and retry." },
@@ -287,7 +287,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`fal:create:${ip}`, 10, 60_000);
+  const limit = await checkRateLimit(`fal:create:${ip}`, 10, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Rate limit reached for generation. Wait a minute and retry." },

@@ -6,7 +6,7 @@ import { NextRequest } from "next/server";
 // ---------------------------------------------------------------------------
 
 vi.mock("@/lib/server/rate-limit", () => ({
-  checkRateLimit: vi.fn().mockReturnValue({
+  checkRateLimit: vi.fn().mockResolvedValue({
     allowed: true,
     remaining: 10,
     resetAt: Date.now() + 60_000,
@@ -66,7 +66,7 @@ describe("POST /api/analyze-reference", () => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = "test-gemini-key";
 
-    vi.mocked(checkRateLimit).mockReturnValue({
+    vi.mocked(checkRateLimit).mockResolvedValue({
       allowed: true,
       remaining: 10,
       resetAt: Date.now() + 60_000,
@@ -206,7 +206,7 @@ describe("POST /api/analyze-reference", () => {
   });
 
   it("returns 429 when rate limit exceeded", async () => {
-    vi.mocked(checkRateLimit).mockReturnValue({
+    vi.mocked(checkRateLimit).mockResolvedValue({
       allowed: false,
       remaining: 0,
       resetAt: Date.now() + 60_000,

@@ -89,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // --- Rate limit: 100 presign requests per minute per IP ---
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`r2:presign:${ip}`, 100, 60_000);
+  const limit = await checkRateLimit(`r2:presign:${ip}`, 100, 60_000);
   if (!limit.allowed) {
     log.warn("r2.presign.rate_limited", {
       request_id: requestId,

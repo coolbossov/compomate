@@ -36,7 +36,7 @@ function applySessionCookie(response: NextResponse, sessionId: string, isNew: bo
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`templates:list:${ip}`, 80, 60_000);
+  const limit = await checkRateLimit(`templates:list:${ip}`, 80, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many template requests. Please wait and retry." },
@@ -85,7 +85,7 @@ type SaveTemplateBody = {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`templates:save:${ip}`, 30, 60_000);
+  const limit = await checkRateLimit(`templates:save:${ip}`, 30, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many template save attempts. Please wait and retry." },

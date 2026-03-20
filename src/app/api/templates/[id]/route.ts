@@ -22,7 +22,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`templates:get:${ip}`, 80, 60_000);
+  const limit = await checkRateLimit(`templates:get:${ip}`, 80, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many template requests. Please wait and retry." },
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
 
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`templates:delete:${ip}`, 30, 60_000);
+  const limit = await checkRateLimit(`templates:delete:${ip}`, 30, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many template delete attempts. Please wait and retry." },

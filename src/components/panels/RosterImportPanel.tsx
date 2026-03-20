@@ -1,14 +1,18 @@
 'use client';
 
 import { useRef } from 'react';
+import Papa from 'papaparse';
 import { Upload, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { captureEvent } from '@/lib/client/posthog';
 
 /**
  * RosterImportPanel
  *
  * Compact row placed in FilePanel, below the Add Files / Add Folder buttons.
- * Parses a CSV with columns FirstName,LastName and loads it into the roster queue.
+ * Parses a CSV with columns FirstName,LastName (case-insensitive) and loads
+ * it into the roster queue. Handles quoted fields, BOM headers, commas in
+ * names, and tab-separated exports from school software.
  * The queue is consumed sequentially: one entry per subject advance.
  */
 export function RosterImportPanel() {
@@ -23,31 +27,49 @@ export function RosterImportPanel() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result as string;
-      const lines = text.split('\n').filter(Boolean);
-      const rows = lines
-        // Skip header row if the first column looks like "firstname"
-        .filter((l) => !/^"?firstname"?/i.test(l.split(',')[0]))
-        .map((l) => {
-          const parts = l.split(',');
-          const firstName = (parts[0] ?? '').trim().replace(/^"|"$/g, '');
-          const lastName = (parts[1] ?? '').trim().replace(/^"|"$/g, '');
-          return { firstName, lastName };
-        })
-        .filter((r) => r.firstName || r.lastName);
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (h) => h.trim().replace(/^\uFEFF/, ''), // strip BOM
+      complete(results) {
+        const headers = results.meta.fields ?? [];
 
-      if (rows.length === 0) {
-        showToast('No valid rows found in CSV.', 4000, 'error');
-        return;
-      }
+        // Case-insensitive column lookup
+        const find = (candidates: string[]) =>
+          headers.find((h) =>
+            candidates.some((c) => h.toLowerCase().replace(/\s+/g, '') === c.toLowerCase()),
+          ) ?? null;
 
-      loadRoster(rows);
-      showToast(`Roster loaded: ${rows.length} athletes`, 3000, 'success');
-    };
+        const firstCol = find(['firstname', 'first_name', 'first']);
+        const lastCol = find(['lastname', 'last_name', 'last']);
 
-    reader.readAsText(file);
+        const rows = results.data
+          .map((row) => ({
+            firstName: firstCol ? (row[firstCol] ?? '').trim() : '',
+            lastName: lastCol ? (row[lastCol] ?? '').trim() : '',
+          }))
+          .filter((r) => r.firstName || r.lastName);
+
+        const skipped = results.data.length - rows.length;
+
+        if (rows.length === 0) {
+          showToast('No valid rows found. Expected columns: FirstName, LastName.', 5000, 'error');
+          return;
+        }
+
+        loadRoster(rows);
+        captureEvent('roster_loaded', { count: rows.length, skipped });
+        const msg =
+          skipped > 0
+            ? `Roster loaded: ${rows.length} athletes, ${skipped} rows skipped`
+            : `Roster loaded: ${rows.length} athletes`;
+        showToast(msg, 3000, 'success');
+      },
+      error(err) {
+        showToast(`CSV parse error: ${err.message}`, 5000, 'error');
+      },
+    });
+
     // Reset so the same file can be re-imported without a page reload
     e.target.value = '';
   }

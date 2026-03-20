@@ -30,7 +30,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`r2:download:${ip}`, 120, 60_000);
+  const limit = await checkRateLimit(`r2:download:${ip}`, 120, 60_000);
   if (!limit.allowed) {
     log.warn("r2.download.rate_limited", {
       request_id: requestId,

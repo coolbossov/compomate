@@ -20,7 +20,7 @@ export async function GET(
   context: RouteContext,
 ): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`projects:get:${ip}`, 120, 60_000);
+  const limit = await checkRateLimit(`projects:get:${ip}`, 120, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please wait and retry." },

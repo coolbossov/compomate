@@ -8,6 +8,7 @@ import { useSubjects } from '@/lib/store/selectors';
 import { filesToAssets, collectImageFiles } from '@/lib/client/utils';
 import { computeAutoPlacement } from '@/lib/client/autoPlacement';
 import { uploadFileToR2 } from '@/lib/client/uploader';
+import { captureEvent } from '@/lib/client/posthog';
 import { RosterImportPanel } from './RosterImportPanel';
 
 export function FilePanel() {
@@ -74,6 +75,7 @@ export function FilePanel() {
       }
       registerUrls(assets.map((a) => a.objectUrl));
       addSubjects(assets);
+      captureEvent('subjects_imported', { count: assets.length, skipped: skipped.length });
       const suffix = skipped.length > 0 ? ` ${skipped.slice(0, 2).join(' ')}` : '';
       showToast(`Added ${assets.length} subject file(s).${suffix}`);
 

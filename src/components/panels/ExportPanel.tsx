@@ -37,6 +37,7 @@ import {
   DEFAULT_JOB_NAME,
 } from '@/lib/constants';
 import type { BatchItem } from '@/types/export';
+import { captureEvent } from '@/lib/client/posthog';
 import {
   Dialog,
   DialogContent,
@@ -253,6 +254,7 @@ export function ExportPanel() {
 
       incrementExportCounter();
       markExported(activeSubject.id);
+      captureEvent('export_completed', { profile: exportProfileId, batch: false });
       toast(filename, { duration: EXPORT_TOAST_DURATION_MS });
 
       // Trigger download
@@ -475,6 +477,7 @@ export function ExportPanel() {
       }
 
       if (exportedCount > 0) {
+        captureEvent('batch_export_completed', { count: exportedCount });
         const bundle = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(bundle);
         const anchor = document.createElement('a');

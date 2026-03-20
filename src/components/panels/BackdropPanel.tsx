@@ -17,6 +17,7 @@ import {
   r2KeyToBackdropAsset,
 } from '@/lib/client/utils';
 import { uploadBlobToR2, uploadFileToR2 } from '@/lib/client/uploader';
+import { captureEvent } from '@/lib/client/posthog';
 import {
   BACKDROP_POLL_INTERVAL_MS,
   BACKDROP_MAX_POLLS,
@@ -240,6 +241,7 @@ export function BackdropPanel() {
     resetGeneration();
     setGeneration({ status: 'generating', prompt });
     showToast('Generating backdrop…');
+    const generationStartedAt = Date.now();
 
     try {
       const response = await fetch('/api/generate-backdrop', {
@@ -288,6 +290,10 @@ export function BackdropPanel() {
       addBackdrop(asset);
       setActiveBackdrop(asset.id);
       setGeneration({ status: 'done' });
+      captureEvent('backdrop_generated', {
+        model: String(body.model ?? 'flux'),
+        duration_ms: Date.now() - generationStartedAt,
+      });
       showToast('Generated backdrop added to library.');
 
       // Upload to R2 in background

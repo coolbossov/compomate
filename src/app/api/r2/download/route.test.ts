@@ -15,7 +15,7 @@ vi.mock("@/lib/server/env", () => ({
 }));
 
 vi.mock("@/lib/server/rate-limit", () => ({
-  checkRateLimit: vi.fn().mockReturnValue({
+  checkRateLimit: vi.fn().mockResolvedValue({
     allowed: true,
     remaining: 10,
     resetAt: Date.now() + 60_000,
@@ -59,7 +59,7 @@ describe("GET /api/r2/download", () => {
       R2_ENDPOINT: "https://r2.test",
     });
 
-    vi.mocked(checkRateLimit).mockReturnValue({
+    vi.mocked(checkRateLimit).mockResolvedValue({
       allowed: true,
       remaining: 10,
       resetAt: Date.now() + 60_000,
@@ -95,7 +95,7 @@ describe("GET /api/r2/download", () => {
   });
 
   it("returns 429 when rate limit is exceeded", async () => {
-    vi.mocked(checkRateLimit).mockReturnValue({
+    vi.mocked(checkRateLimit).mockResolvedValue({
       allowed: false,
       remaining: 0,
       resetAt: Date.now() + 60_000,

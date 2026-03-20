@@ -20,7 +20,7 @@ type SaveProjectBody = {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`projects:list:${ip}`, 80, 60_000);
+  const limit = await checkRateLimit(`projects:list:${ip}`, 80, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please wait a moment and retry." },
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`projects:save:${ip}`, 30, 60_000);
+  const limit = await checkRateLimit(`projects:save:${ip}`, 30, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Too many save attempts. Please wait and retry." },

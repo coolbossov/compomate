@@ -138,7 +138,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
   const requestId = request.headers.get("x-request-id") ?? "unknown";
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`export:${ip}`, EXPORT_RATE_LIMIT_PER_MINUTE, 60_000);
+  const limit = await checkRateLimit(`export:${ip}`, EXPORT_RATE_LIMIT_PER_MINUTE, 60_000);
   if (!limit.allowed) {
     log.warn("export.rate_limited", {
       request_id: requestId,

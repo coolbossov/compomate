@@ -126,7 +126,7 @@ async function prepareImageFromR2(r2Key: string, sessionId: string): Promise<Pre
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`gemini:analyze:${ip}`, 10, 60_000);
+  const limit = await checkRateLimit(`gemini:analyze:${ip}`, 10, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: "Rate limit reached. Please wait a moment and retry." },

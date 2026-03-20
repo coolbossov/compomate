@@ -10,80 +10,80 @@ describe('checkRateLimit', () => {
     vi.useRealTimers();
   });
 
-  it('allows the first request with remaining = limit - 1', () => {
-    const result = checkRateLimit('test-first', 5, 60_000);
+  it('allows the first request with remaining = limit - 1', async () => {
+    const result = await checkRateLimit('test-first', 5, 60_000);
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(4);
   });
 
-  it('allows N requests up to the limit', () => {
+  it('allows N requests up to the limit', async () => {
     const key = 'test-up-to-limit';
     const limit = 3;
     const window = 60_000;
 
     for (let i = 0; i < limit; i++) {
-      const result = checkRateLimit(key, limit, window);
+      const result = await checkRateLimit(key, limit, window);
       expect(result.allowed).toBe(true);
       expect(result.remaining).toBe(limit - (i + 1));
     }
   });
 
-  it('blocks request at limit + 1', () => {
+  it('blocks request at limit + 1', async () => {
     const key = 'test-over-limit';
     const limit = 3;
     const window = 60_000;
 
     // Use up all requests
     for (let i = 0; i < limit; i++) {
-      checkRateLimit(key, limit, window);
+      await checkRateLimit(key, limit, window);
     }
 
     // Next request should be blocked
-    const result = checkRateLimit(key, limit, window);
+    const result = await checkRateLimit(key, limit, window);
     expect(result.allowed).toBe(false);
     expect(result.remaining).toBe(0);
   });
 
-  it('tracks different keys independently', () => {
+  it('tracks different keys independently', async () => {
     const limit = 2;
     const window = 60_000;
 
     // Exhaust key A
-    checkRateLimit('key-a', limit, window);
-    checkRateLimit('key-a', limit, window);
-    const blockedA = checkRateLimit('key-a', limit, window);
+    await checkRateLimit('key-a', limit, window);
+    await checkRateLimit('key-a', limit, window);
+    const blockedA = await checkRateLimit('key-a', limit, window);
     expect(blockedA.allowed).toBe(false);
 
     // Key B should still be allowed
-    const resultB = checkRateLimit('key-b', limit, window);
+    const resultB = await checkRateLimit('key-b', limit, window);
     expect(resultB.allowed).toBe(true);
     expect(resultB.remaining).toBe(1);
   });
 
-  it('allows requests again after window expires', () => {
+  it('allows requests again after window expires', async () => {
     const key = 'test-window-expire';
     const limit = 2;
     const window = 60_000;
 
     // Exhaust limit
-    checkRateLimit(key, limit, window);
-    checkRateLimit(key, limit, window);
-    const blocked = checkRateLimit(key, limit, window);
+    await checkRateLimit(key, limit, window);
+    await checkRateLimit(key, limit, window);
+    const blocked = await checkRateLimit(key, limit, window);
     expect(blocked.allowed).toBe(false);
 
     // Advance past the window
     vi.advanceTimersByTime(window + 1);
 
     // Should be allowed again
-    const result = checkRateLimit(key, limit, window);
+    const result = await checkRateLimit(key, limit, window);
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(limit - 1);
   });
 
-  it('returns correct resetAt timestamp', () => {
+  it('returns correct resetAt timestamp', async () => {
     vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
     const window = 60_000;
-    const result = checkRateLimit('test-reset', 5, window);
+    const result = await checkRateLimit('test-reset', 5, window);
 
     const expectedResetAt = Date.now() + window;
     expect(result.resetAt).toBe(expectedResetAt);

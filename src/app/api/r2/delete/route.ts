@@ -42,7 +42,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
   // --- Rate limit: 60 delete requests per minute per IP ---
   const ip = requestIp(request.headers);
-  const limit = checkRateLimit(`r2:delete:${ip}`, 60, 60_000);
+  const limit = await checkRateLimit(`r2:delete:${ip}`, 60, 60_000);
   if (!limit.allowed) {
     log.warn("r2.delete.rate_limited", {
       request_id: requestId,
