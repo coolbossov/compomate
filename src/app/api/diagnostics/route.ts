@@ -95,6 +95,26 @@ async function checkSupabase(): Promise<CheckResult> {
 async function checkR2(): Promise<CheckResult> {
   const startedAt = Date.now();
   try {
+    // Worker path (preferred): verify the Worker is reachable
+    const workerUrl = process.env.R2_WORKER_URL?.trim();
+    if (workerUrl) {
+      const res = await fetch(`${workerUrl.replace(/\/$/, "")}/object/__diagnostics__`, {
+        method: "GET",
+      });
+      // 404 = bucket is accessible but key doesn't exist (expected) → healthy
+      // 200 = key exists → also healthy
+      // 5xx / network error → unhealthy
+      if (res.status === 404 || res.status === 200) {
+        return { ok: true, detail: "worker", duration_ms: Date.now() - startedAt };
+      }
+      return {
+        ok: false,
+        detail: `R2 Worker returned ${res.status}`,
+        duration_ms: Date.now() - startedAt,
+      };
+    }
+
+    // S3 path (legacy): HeadBucket with S3-compatible credentials
     const accountId = process.env.R2_ACCOUNT_ID;
     const accessKeyId = process.env.R2_ACCESS_KEY_ID;
     const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
