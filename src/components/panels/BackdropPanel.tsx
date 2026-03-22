@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -6,8 +5,6 @@ import { useStore } from '@/lib/store';
 import { useBackdrops, useGeneration } from '@/lib/store/selectors';
 import {
   filesToBackdropAssets,
-  collectImageFiles,
-  dataUrlToAsset,
   dataUrlToBackdropAsset,
   parseErrorText,
   wait,
@@ -15,16 +12,15 @@ import {
   fileToDataUrl,
   r2KeyToAsset,
   r2KeyToBackdropAsset,
+  dataUrlToAsset,
 } from '@/lib/client/utils';
-import { uploadBlobToR2, uploadFileToR2 } from '@/lib/client/uploader';
+import { uploadBlobToR2 } from '@/lib/client/uploader';
 import { captureEvent } from '@/lib/client/posthog';
 import {
   BACKDROP_POLL_INTERVAL_MS,
   BACKDROP_MAX_POLLS,
-  BACKDROP_DEFAULT_STYLE_HINT,
   PROJECT_SNAPSHOT_VERSION,
 } from '@/lib/constants';
-import { Loader2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type {
   FalBackdropPendingPayload,
@@ -32,6 +28,9 @@ import type {
 } from '@/types/export';
 import { isFalPending, isFalCompleted } from '@/types/export';
 import type { SerializedAsset, StoredProjectSummary } from '@/lib/shared/project-snapshot';
+import { BackdropLibrary } from './BackdropLibrary';
+import { BackdropAIGenerateTab } from './BackdropAIGenerateTab';
+import { BackdropReferencePhotoTab } from './BackdropReferencePhotoTab';
 
 // ---------------------------------------------------------------------------
 // Local type guards for fal payloads
@@ -40,19 +39,6 @@ import type { SerializedAsset, StoredProjectSummary } from '@/lib/shared/project
 function isFalPayload(value: unknown): value is FalBackdropPendingPayload | FalBackdropCompletedPayload {
   return !!value && typeof value === 'object' && 'pending' in (value as object);
 }
-
-// ---------------------------------------------------------------------------
-// Ideogram style options
-// ---------------------------------------------------------------------------
-
-const IDEOGRAM_STYLES = [
-  { value: 'REALISTIC', label: 'Realistic' },
-  { value: 'DESIGN', label: 'Design' },
-  { value: 'RENDER_3D', label: 'Render 3D' },
-  { value: 'ANIME', label: 'Anime' },
-] as const;
-
-type IdeogramStyleValue = (typeof IDEOGRAM_STYLES)[number]['value'];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -73,28 +59,7 @@ export function BackdropPanel() {
 
   const objectUrlsRef = useRef(new Set<string>());
 
-  // ----- Upload tab state -----
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  // ----- AI Generate tab state -----
-  const [generatePrompt, setGeneratePrompt] = useState('');
-  const [generateStyleHint, setGenerateStyleHint] = useState(BACKDROP_DEFAULT_STYLE_HINT);
-  const [generateAspectMode, setGenerateAspectMode] = useState<'portrait' | 'landscape' | 'square'>('portrait');
-  const [ideogramStyle, setIdeogramStyle] = useState<IdeogramStyleValue>('REALISTIC');
-  const [isGeneratingFlux, setIsGeneratingFlux] = useState(false);
-  const [isGeneratingIdeogram, setIsGeneratingIdeogram] = useState(false);
-
-  // ----- Reference Photo tab state -----
-  const [refPhotoPreviewUrl, setRefPhotoPreviewUrl] = useState<string | null>(null);
-  const [refPhotoName, setRefPhotoName] = useState<string>('');
-  const [refPhotoR2Key, setRefPhotoR2Key] = useState<string | null>(null);
-  const [isUploadingRefPhoto, setIsUploadingRefPhoto] = useState(false);
-  const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
-  const [refGeneratedPrompt, setRefGeneratedPrompt] = useState('');
-  const [isGeneratingFromRef, setIsGeneratingFromRef] = useState(false);
-  const refPhotoPreviewUrlRef = useRef<string | null>(null);
-
-  // ----- Projects (Supabase) state (unchanged) -----
+  // ----- Projects (Supabase) state -----
   const [projectName, setProjectName] = useState('Session');
   const [savedProjects, setSavedProjects] = useState<StoredProjectSummary[]>([]);
   const [isSavingProject, setIsSavingProject] = useState(false);
@@ -106,15 +71,6 @@ export function BackdropPanel() {
   useEffect(() => {
     void refreshProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (refPhotoPreviewUrlRef.current) {
-        URL.revokeObjectURL(refPhotoPreviewUrlRef.current);
-        refPhotoPreviewUrlRef.current = null;
-      }
-    };
   }, []);
 
   // ----- Store selectors for snapshot -----
@@ -165,33 +121,6 @@ export function BackdropPanel() {
     }
   }
 
-  function triggerFilePicker(mode: 'files' | 'folder'): void {
-    const input = document.createElement('input');
-    input.type = 'file'; input.multiple = true; input.accept = 'image/*,.tif,.tiff';
-    input.style.cssText = 'position:fixed;left:-9999px;top:0';
-    if (mode === 'folder') { input.setAttribute('webkitdirectory', ''); input.setAttribute('directory', ''); }
-    let cleaned = false;
-    const cleanup = () => { if (cleaned) return; cleaned = true; input.onchange = null; input.oncancel = null; input.remove(); };
-    input.onchange = () => { const files = input.files ? Array.from(input.files) : []; void handleBackdropFiles(files).then(cleanup); };
-    input.oncancel = () => { cleanup(); showToast('Selection cancelled.'); };
-    document.body.append(input); input.click();
-  }
-
-  async function pickFolder(): Promise<void> {
-    const win = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
-    if (win.showDirectoryPicker) {
-      try {
-        const handle = await win.showDirectoryPicker();
-        const files = await collectImageFiles(handle);
-        await handleBackdropFiles(files); return;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : '';
-        if (message.toLowerCase().includes('abort')) { showToast('Folder selection cancelled.'); return; }
-      }
-    }
-    triggerFilePicker('folder');
-  }
-
   function handleRemove(id: string): void {
     const backdrop = backdrops.find((b) => b.id === id);
     if (backdrop && objectUrlsRef.current.has(backdrop.objectUrl)) {
@@ -200,29 +129,6 @@ export function BackdropPanel() {
     }
     removeBackdrop(id);
     showToast('Backdrop removed.');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Drag & drop
-  // ---------------------------------------------------------------------------
-
-  function handleDragOver(e: React.DragEvent): void {
-    e.preventDefault();
-    setIsDragOver(true);
-  }
-
-  function handleDragLeave(e: React.DragEvent): void {
-    e.preventDefault();
-    setIsDragOver(false);
-  }
-
-  function handleDrop(e: React.DragEvent): void {
-    e.preventDefault();
-    setIsDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(
-      (f) => f.type.startsWith('image/') || /\.(tif|tiff)$/i.test(f.name)
-    );
-    void handleBackdropFiles(files);
   }
 
   // ---------------------------------------------------------------------------
@@ -312,69 +218,7 @@ export function BackdropPanel() {
   }
 
   // ---------------------------------------------------------------------------
-  // Reference Photo analysis
-  // ---------------------------------------------------------------------------
-
-  function handleRefPhotoSelect(): void {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*';
-    input.style.cssText = 'position:fixed;left:-9999px;top:0';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      input.remove();
-      if (!file) return;
-
-      const previewUrl = URL.createObjectURL(file);
-      if (refPhotoPreviewUrlRef.current) {
-        URL.revokeObjectURL(refPhotoPreviewUrlRef.current);
-      }
-      refPhotoPreviewUrlRef.current = previewUrl;
-      setRefPhotoPreviewUrl(previewUrl);
-      setRefPhotoName(file.name);
-      setRefPhotoR2Key(null);
-      setRefGeneratedPrompt('');
-      setIsUploadingRefPhoto(true);
-
-      try {
-        const { key } = await uploadFileToR2(file, 'backdrop');
-        setRefPhotoR2Key(key);
-        showToast('Reference photo uploaded. Ready to analyze.');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to upload reference photo.';
-        showToast(message);
-      } finally {
-        setIsUploadingRefPhoto(false);
-      }
-    };
-    document.body.append(input); input.click();
-  }
-
-  async function analyzeReferencePhoto(): Promise<void> {
-    if (!refPhotoR2Key) {
-      showToast(isUploadingRefPhoto ? 'Reference photo is still uploading.' : 'Upload a reference photo first.');
-      return;
-    }
-
-    setIsAnalyzingRef(true);
-    try {
-      const res = await fetch('/api/analyze-reference', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ r2Key: refPhotoR2Key }),
-      });
-      if (!res.ok) { const text = await res.text(); throw new Error(parseErrorText(text)); }
-      const { prompt } = (await res.json()) as { prompt: string };
-      setRefGeneratedPrompt(prompt);
-      showToast('Backdrop prompt generated from reference photo.');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Reference analysis failed.');
-    } finally {
-      setIsAnalyzingRef(false);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Projects (Supabase) — unchanged from original
+  // Projects (Supabase)
   // ---------------------------------------------------------------------------
 
   const activeBackdrop = backdrops.find((b) => b.id === activeBackdropId) ?? null;
@@ -527,8 +371,6 @@ export function BackdropPanel() {
   // Render
   // ---------------------------------------------------------------------------
 
-  const isGenerating = isGeneratingFlux || isGeneratingIdeogram || isGeneratingFromRef;
-
   return (
     <>
       {/* ─── Backdrop library with tabs ─── */}
@@ -547,252 +389,31 @@ export function BackdropPanel() {
 
           {/* ──── Upload Tab ──── */}
           <TabsContent value="upload" className="space-y-3 pt-3">
-            {/* Drag-and-drop zone */}
-            <div
-              className={`rounded-lg border-2 border-dashed transition-colors p-4 text-center cursor-pointer ${
-                isDragOver
-                  ? 'border-[#6367FF] bg-[#6367FF]/10 text-[#6367FF]'
-                  : 'border-[color:var(--panel-border)] text-[var(--text-soft)] hover:border-[#6367FF]/50'
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => triggerFilePicker('files')}
-              role="button"
-              aria-label="Drop backdrop images here or click to browse"
-            >
-              <p className="text-xs">
-                {isDragOver ? 'Drop images here' : 'Drag & drop or click to browse'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button className="btn-secondary" type="button" onClick={() => triggerFilePicker('files')}>
-                Add Files
-              </button>
-              <button className="btn-secondary" type="button" onClick={() => { void pickFolder(); }}>
-                Add Folder
-              </button>
-            </div>
-
-            {/* Thumbnail grid */}
-            {backdrops.length > 0 && (
-              <div className="grid grid-cols-2 gap-2">
-                {backdrops.map((backdrop) => (
-                  <div
-                    key={backdrop.id}
-                    className={`group relative rounded-lg overflow-hidden border-2 cursor-pointer transition-colors ${
-                      backdrop.id === activeBackdropId
-                        ? 'border-[#6367FF]'
-                        : 'border-[color:var(--panel-border)] hover:border-[#6367FF]/50'
-                    }`}
-                    onClick={() => {
-                      // Click active backdrop again to deselect it
-                      if (backdrop.id === activeBackdropId) {
-                        setActiveBackdrop(null);
-                      } else {
-                        setActiveBackdrop(backdrop.id);
-                      }
-                    }}
-                  >
-                    <img
-                      className="aspect-[4/5] w-full object-cover"
-                      src={backdrop.objectUrl}
-                      alt={backdrop.name}
-                    />
-                    {/* Hover delete button */}
-                    <button
-                      className="absolute top-1 right-1 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-black/70 text-white text-xs hover:bg-red-500/90 transition-colors"
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleRemove(backdrop.id); }}
-                      aria-label={`Remove ${backdrop.name}`}
-                    >
-                      ✕
-                    </button>
-                    <p className="truncate px-1 pb-1 pt-0.5 text-[10px] text-[var(--text-soft)] bg-black/40">
-                      {backdrop.name}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+            <BackdropLibrary
+              backdrops={backdrops}
+              activeBackdropId={activeBackdropId}
+              onAdd={handleBackdropFiles}
+              onRemove={handleRemove}
+              onSetActive={setActiveBackdrop}
+            />
           </TabsContent>
 
           {/* ──── AI Generate Tab ──── */}
           <TabsContent value="ai-generate" className="space-y-4 pt-3">
-            {/* Shared prompt */}
-            <textarea
-              className="input min-h-20 resize-y"
-              placeholder="Describe the backdrop to generate…"
-              value={generatePrompt}
-              onChange={(e) => setGeneratePrompt(e.target.value)}
+            <BackdropAIGenerateTab
+              onGenerate={runFalGeneration}
+              generation={generation}
+              isAnyGenerating={false}
             />
-
-            {/* Generation status */}
-            {(generation.status === 'generating' || generation.status === 'polling') && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground px-1 py-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>
-                  {generation.status === 'generating'
-                    ? 'Sending to AI...'
-                    : `Generating backdrop${generation.queuePosition ? ` (queue: ${generation.queuePosition})` : '...'}`}
-                </span>
-              </div>
-            )}
-            {generation.status === 'polling' && generation.queuePosition !== undefined && (
-              <p className="text-xs text-[var(--text-soft)]">Queue position: {generation.queuePosition}</p>
-            )}
-            {generation.status === 'error' && (
-              <p className="text-xs text-red-400">{generation.error}</p>
-            )}
-
-            {/* ── Flux sub-section ── */}
-            <div className="space-y-2 rounded-lg border border-[color:var(--panel-border)] p-3">
-              <p className="text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">Flux</p>
-              <input
-                className="input"
-                placeholder="Style hint"
-                value={generateStyleHint}
-                onChange={(e) => setGenerateStyleHint(e.target.value)}
-              />
-              <select
-                className="input"
-                value={generateAspectMode}
-                onChange={(e) => setGenerateAspectMode(e.target.value as 'portrait' | 'landscape' | 'square')}
-              >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-                <option value="square">Square</option>
-              </select>
-              <button
-                className="btn-secondary w-full"
-                type="button"
-                disabled={isGenerating}
-                onClick={() =>
-                  void runFalGeneration(
-                    { prompt: generatePrompt, styleHint: generateStyleHint, aspectMode: generateAspectMode, model: 'flux' },
-                    'flux',
-                    setIsGeneratingFlux,
-                  )
-                }
-              >
-                {isGeneratingFlux ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating with Flux…
-                  </span>
-                ) : 'Generate with Flux'}
-              </button>
-            </div>
-
-            {/* ── Ideogram v2 sub-section ── */}
-            <div className="space-y-2 rounded-lg border border-[color:var(--panel-border)] p-3">
-              <p className="text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">Ideogram v2</p>
-              <select
-                className="input"
-                value={ideogramStyle}
-                onChange={(e) => setIdeogramStyle(e.target.value as IdeogramStyleValue)}
-              >
-                {IDEOGRAM_STYLES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-              <button
-                className="btn-secondary w-full"
-                type="button"
-                disabled={isGenerating}
-                onClick={() =>
-                  void runFalGeneration(
-                    { prompt: generatePrompt, model: 'ideogram', styleType: ideogramStyle },
-                    'ideogram',
-                    setIsGeneratingIdeogram,
-                  )
-                }
-              >
-                {isGeneratingIdeogram ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating with Ideogram…
-                  </span>
-                ) : 'Generate with Ideogram'}
-              </button>
-            </div>
           </TabsContent>
 
           {/* ──── Reference Photo Tab ──── */}
           <TabsContent value="reference" className="space-y-3 pt-3">
-            <p className="text-xs text-[var(--text-soft)]">
-              Upload a photo that captures the vibe or lighting you want. Gemini Vision will analyze it and write a backdrop generation prompt.
-            </p>
-
-            {/* Reference photo picker / preview */}
-            <div
-              className="rounded-lg border-2 border-dashed border-[color:var(--panel-border)] hover:border-[#6367FF]/50 transition-colors p-3 text-center cursor-pointer"
-              onClick={handleRefPhotoSelect}
-              role="button"
-              aria-label="Upload reference photo"
-            >
-              {refPhotoPreviewUrl ? (
-                <div className="space-y-1">
-                  <img
-                    src={refPhotoPreviewUrl}
-                    alt="Reference"
-                    className="mx-auto max-h-32 rounded object-contain"
-                  />
-                  <p className="text-[10px] text-[var(--text-soft)] truncate">{refPhotoName}</p>
-                  <p className="text-[10px] text-[#6367FF]">
-                    {isUploadingRefPhoto ? 'Uploading…' : refPhotoR2Key ? 'Ready to analyze' : 'Click to change'}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs text-[var(--text-soft)]">Click to upload reference photo</p>
-              )}
-            </div>
-
-            <button
-              className="btn-secondary w-full"
-              type="button"
-              disabled={!refPhotoR2Key || isUploadingRefPhoto || isAnalyzingRef}
-              onClick={() => { void analyzeReferencePhoto(); }}
-            >
-              {isUploadingRefPhoto ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading reference photo…
-                </span>
-              ) : isAnalyzingRef ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing with Gemini…
-                </span>
-              ) : 'Analyze Reference Photo'}
-            </button>
-
-            {/* Generated prompt (editable) */}
-            {refGeneratedPrompt && (
-              <div className="space-y-2">
-                <p className="text-xs text-[var(--text-soft)] font-medium">Generated prompt (editable):</p>
-                <textarea
-                  className="input min-h-24 resize-y"
-                  value={refGeneratedPrompt}
-                  onChange={(e) => setRefGeneratedPrompt(e.target.value)}
-                />
-                <button
-                  className="btn-secondary w-full"
-                  type="button"
-                  disabled={isGenerating}
-                  onClick={() =>
-                    void runFalGeneration(
-                      { prompt: refGeneratedPrompt, model: 'flux' },
-                      'ref-flux',
-                      setIsGeneratingFromRef,
-                    )
-                  }
-                >
-                  {isGeneratingFromRef ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…
-                    </span>
-                  ) : 'Generate Backdrop from This Prompt'}
-                </button>
-              </div>
-            )}
+            <BackdropReferencePhotoTab
+              onGenerate={runFalGeneration}
+              isAnyGenerating={false}
+              showToast={showToast}
+            />
           </TabsContent>
         </Tabs>
       </section>

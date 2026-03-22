@@ -37,6 +37,7 @@ import {
   DEFAULT_JOB_NAME,
 } from '@/lib/constants';
 import type { BatchItem } from '@/types/export';
+import type { ServerBatchItem } from '@/app/api/batch-export/start/route';
 import { captureEvent } from '@/lib/client/posthog';
 import {
   Dialog,
@@ -185,6 +186,16 @@ export function ExportPanel() {
   const batchAbortRef = useRef(false);
   const batchRequestAbortRef = useRef<AbortController | null>(null);
   const approvalDecisionResolverRef = useRef<((shouldContinue: boolean) => void) | null>(null);
+
+  // Server batch state
+  const [isServerBatchRunning, setIsServerBatchRunning] = useState(false);
+  const [serverBatchJobId, setServerBatchJobId] = useState<string | null>(null);
+  const [serverBatchProgress, setServerBatchProgress] = useState<{
+    done: number;
+    total: number;
+    status: string;
+  } | null>(null);
+  const serverBatchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activeProfile = EXPORT_PROFILES[exportProfileId];
 
@@ -343,6 +354,136 @@ export function ExportPanel() {
   function queueAllSubjectsOnBackdrop(): void {
     if (!activeBackdrop || subjects.length === 0) return;
     for (const s of subjects) queuePair(activeBackdrop.id, s.id, activeBackdrop.name, s.name);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Server batch export
+  // ---------------------------------------------------------------------------
+
+  function stopServerBatchPolling(): void {
+    if (serverBatchPollRef.current !== null) {
+      clearInterval(serverBatchPollRef.current);
+      serverBatchPollRef.current = null;
+    }
+  }
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => { stopServerBatchPolling(); };
+  }, []);
+
+  async function runServerBatchExport(): Promise<void> {
+    if (isServerBatchRunning) return;
+
+    const queue = batchItems.filter((i) => i.status === 'pending' || i.status === 'failed');
+    if (queue.length === 0) return;
+
+    setIsServerBatchRunning(true);
+    setServerBatchJobId(null);
+    setServerBatchProgress(null);
+
+    try {
+      // Build ServerBatchItem[] by resolving image sources for each queue item
+      const resolvedItems: ServerBatchItem[] = await Promise.all(
+        queue.map(async (item, idx) => {
+          const backdrop = backdrops.find((b) => b.id === item.backdropId);
+          const subject = subjects.find((s) => s.id === item.subjectId);
+
+          if (!backdrop || !subject) {
+            throw new Error(`Source asset missing for item: ${item.label}`);
+          }
+
+          const sources = await resolveExportSources(subject, backdrop);
+
+          return {
+            id: item.id,
+            label: item.label,
+            subjectR2Key: sources.subjectR2Key,
+            subjectDataUrl: sources.subjectDataUrl,
+            backdropR2Key: sources.backdropR2Key,
+            backdropDataUrl: sources.backdropDataUrl,
+            composition: item.composition,
+            exportProfileId: item.exportProfile,
+            nameOverlay: {
+              firstName: item.firstName,
+              lastName: item.lastName,
+              style: item.nameStyle,
+              fontPairId: item.fontPairId,
+              enabled: item.nameOverlayEnabled,
+              sizePct: item.nameSizePct,
+              yFromBottomPct: item.nameYFromBottomPct,
+            },
+            firstName: item.firstName,
+            lastName: item.lastName,
+            index: exportCounter + idx + 1,
+          } satisfies ServerBatchItem;
+        }),
+      );
+
+      const res = await fetch('/api/batch-export/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: resolvedItems, jobName: jobName || 'Job' }),
+      });
+
+      if (!res.ok) throw new Error(`Failed to start server batch (${res.status}).`);
+
+      const { jobId } = (await res.json()) as { jobId: string };
+      setServerBatchJobId(jobId);
+      setServerBatchProgress({ done: 0, total: queue.length, status: 'pending' });
+
+      // Poll for status every 3s
+      serverBatchPollRef.current = setInterval(() => {
+        void (async () => {
+          try {
+            const statusRes = await fetch(`/api/batch-export/${jobId}/status`);
+            if (!statusRes.ok) return;
+
+            const data = (await statusRes.json()) as {
+              status: string;
+              total: number;
+              done_count: number;
+              failed_count: number;
+              download_url: string | null;
+              error: string | null;
+            };
+
+            setServerBatchProgress({
+              done: data.done_count,
+              total: data.total,
+              status: data.status,
+            });
+
+            if (data.status === 'done') {
+              stopServerBatchPolling();
+              setIsServerBatchRunning(false);
+              captureEvent('server_batch_export_completed', { count: data.done_count });
+
+              if (data.download_url) {
+                const a = document.createElement('a');
+                a.href = data.download_url;
+                a.download = `${jobName || 'Job'}-batch.zip`;
+                document.body.append(a);
+                a.click();
+                a.remove();
+              }
+
+              toast.success(`Server batch done — ${data.done_count}/${data.total} exported.`);
+            } else if (data.status === 'failed') {
+              stopServerBatchPolling();
+              setIsServerBatchRunning(false);
+              toast.error(`Server batch failed: ${data.error ?? 'Unknown error'}`);
+            }
+          } catch {
+            // polling errors are non-fatal; keep polling
+          }
+        })();
+      }, 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Server batch failed.';
+      toast.error(message);
+      setIsServerBatchRunning(false);
+    }
   }
 
   const waitForBatchApproval = useCallback((): Promise<boolean> => {
@@ -652,9 +793,9 @@ export function ExportPanel() {
             className="btn-primary"
             type="button"
             onClick={() => { void runBatchExport(); }}
-            disabled={isBatchRunning || batchItems.length === 0}
+            disabled={isBatchRunning || isServerBatchRunning || batchItems.length === 0}
           >
-            {isBatchRunning ? 'Running…' : 'Run Batch'}
+            {isBatchRunning ? 'Running…' : 'Run Batch (Browser)'}
           </button>
           <button
             className="btn-secondary"
@@ -671,6 +812,42 @@ export function ExportPanel() {
             {isBatchRunning ? 'Cancel' : 'Clear'}
           </button>
         </div>
+
+        <button
+          className="btn-secondary w-full"
+          type="button"
+          onClick={() => { void runServerBatchExport(); }}
+          disabled={isServerBatchRunning || isBatchRunning || batchItems.length === 0}
+        >
+          {isServerBatchRunning ? 'Server Batch Running…' : 'Run Batch (Server)'}
+        </button>
+
+        {serverBatchProgress && (
+          <div className="rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[var(--text-soft)]">
+                {serverBatchProgress.status === 'done'
+                  ? '✓ Server batch complete'
+                  : serverBatchProgress.status === 'failed'
+                    ? '✗ Server batch failed'
+                    : `Server batch: ${serverBatchProgress.done}/${serverBatchProgress.total} done`}
+              </span>
+              {serverBatchJobId && (
+                <span className="font-mono text-[9px] text-[var(--text-soft)] opacity-50">
+                  {serverBatchJobId.slice(0, 8)}
+                </span>
+              )}
+            </div>
+            {serverBatchProgress.total > 0 && (
+              <div className="h-1 w-full overflow-hidden rounded bg-white/10">
+                <div
+                  className="h-full rounded bg-[var(--brand-primary)] transition-all duration-500"
+                  style={{ width: `${Math.round((serverBatchProgress.done / serverBatchProgress.total) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Approval Gate Dialog */}

@@ -26,6 +26,7 @@ export const MAX_INPUT_EDGE_PX = 12_000; // 12000px on longest edge
 export const R2_BUCKET = "compomate-uploads";
 export const R2_PRESIGNED_EXPIRY_SECONDS = 3600; // 1 hour
 export const R2_MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
+export const CLEANUP_BATCH_SIZE = 200;
 
 // --- Backdrop Generation ---
 export const BACKDROP_POLL_INTERVAL_MS = 2200;
@@ -163,6 +164,7 @@ export const DB_TABLES = {
   USAGE_LOGS: "compomate_usage_logs",
   PROJECTS: "compomate_projects", // legacy
   R2_OBJECTS: "compomate_r2_objects",
+  BATCH_JOBS: "compomate_batch_jobs",
 } as const;
 
 // --- Color Palette (CSS var references for use in Konva / canvas) ---

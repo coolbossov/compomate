@@ -23,12 +23,16 @@ export async function recordR2ObjectOwnership(
 ): Promise<void> {
   const supabase = getSupabaseClientOrThrow();
 
+  const ttlMs = purpose === "export" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+
   const { error } = await supabase
     .from(DB_TABLES.R2_OBJECTS)
     .insert({
       key,
       session_id: sessionId,
       purpose,
+      expires_at: expiresAt,
     });
 
   if (error) {

@@ -1,0 +1,62 @@
+{
+  "name": "CompoMate R2 Cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.COMPOMATE_APP_URL }}/api/r2-cleanup",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-cleanup-token",
+              "value": "={{ $env.COMPOMATE_DIAGNOSTICS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 55000
+        }
+      },
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Runs daily at 02:00 UTC. Calls GET /api/r2-cleanup with x-cleanup-token header to delete expired R2 objects. Requires env vars: COMPOMATE_APP_URL, COMPOMATE_DIAGNOSTICS_TOKEN."
+  }
+}

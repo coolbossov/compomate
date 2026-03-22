@@ -14,6 +14,8 @@ export const ErrorCodes = {
   SUPABASE_WRITE_FAILED: "SUPABASE_WRITE_FAILED",
   SESSION_MISSING: "SESSION_MISSING",
   ENV_MISSING: "ENV_MISSING",
+  BATCH_NOT_FOUND: "BATCH_NOT_FOUND",
+  BATCH_INVALID_INPUT: "BATCH_INVALID_INPUT",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
@@ -34,4 +36,6 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
   SUPABASE_WRITE_FAILED: 500,
   SESSION_MISSING: 401,
   ENV_MISSING: 503,
+  BATCH_NOT_FOUND: 404,
+  BATCH_INVALID_INPUT: 400,
 };
