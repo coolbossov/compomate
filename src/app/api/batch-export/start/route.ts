@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import JSZip from "jszip";
+import { z } from "zod";
 import { waitUntil } from "@vercel/functions";
 import { runCompositorPipeline } from "@/lib/compositing/pipeline";
 import {
@@ -55,11 +56,6 @@ export interface ServerBatchItem {
   index: number;
 }
 
-interface BatchStartRequest {
-  items: ServerBatchItem[];
-  jobName: string;
-}
-
 interface BatchJobItem {
   id: string;
   label: string;
@@ -69,11 +65,19 @@ interface BatchJobItem {
   exportKey?: string;
 }
 
+
+
 // ---------------------------------------------------------------------------
 // Image helpers (same as /api/export)
 // ---------------------------------------------------------------------------
 
+// 20 MB limit — prevents OOM in serverless container (base64 ~33% overhead so 20 MB encoded ≈ 15 MB decoded)
+const DATA_URL_MAX_BYTES = 20 * 1024 * 1024;
+
 function dataUrlToBuffer(dataUrl: string): Buffer {
+  if (dataUrl.length > DATA_URL_MAX_BYTES) {
+    throw new Error(`Data URL exceeds ${DATA_URL_MAX_BYTES / 1024 / 1024} MB limit.`);
+  }
   const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/s);
   if (!match) throw new Error("Invalid data URL format.");
   return Buffer.from(match[2].replace(/\s/g, ""), "base64");
@@ -129,9 +133,12 @@ async function updateJobItems(
 // Core processing (runs inside waitUntil)
 // ---------------------------------------------------------------------------
 
+// Inferred from Zod schema — used as the processJob parameter to avoid unsafe casts
+type ValidatedBatchItem = z.infer<typeof ServerBatchItemSchema>;
+
 async function processJob(
   jobId: string,
-  inputItems: ServerBatchItem[],
+  inputItems: ValidatedBatchItem[],
   jobName: string,
   sessionId: string,
 ): Promise<void> {
@@ -174,14 +181,16 @@ async function processJob(
       const result = await runCompositorPipeline({
         subjectBuffer,
         backdropBuffer,
-        composition: item.composition,
+        // Composition fields are validated by Zod schema but typed loosely; cast here
+        composition: item.composition as CompositionState,
         outputWidth: EXPORT_WIDTH_PX,
         outputHeight: EXPORT_HEIGHT_PX,
         nameOverlay: {
           firstName: item.nameOverlay.firstName,
           lastName: item.nameOverlay.lastName,
-          style: item.nameOverlay.style,
-          fontPairId: item.nameOverlay.fontPairId,
+          // Style/fontPairId are validated by the client as literal union types; cast here
+          style: item.nameOverlay.style as NameStyleId,
+          fontPairId: item.nameOverlay.fontPairId as FontPairId,
           enabled: item.nameOverlay.enabled,
           sizePct: item.nameOverlay.sizePct,
           yFromBottomPct: item.nameOverlay.yFromBottomPct,
@@ -307,6 +316,43 @@ async function processJob(
 
 const MAX_BATCH_ITEMS = 100;
 
+// ---------------------------------------------------------------------------
+// Zod validation schemas
+// ---------------------------------------------------------------------------
+
+const NameOverlaySchema = z.object({
+  firstName: z.string().max(100),
+  lastName: z.string().max(100),
+  style: z.string().max(50),
+  fontPairId: z.string().max(50),
+  enabled: z.boolean(),
+  sizePct: z.number().min(0).max(200),
+  yFromBottomPct: z.number().min(0).max(100),
+});
+
+const ServerBatchItemSchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string().max(256),
+  subjectR2Key: z.string().max(512).optional(),
+  subjectDataUrl: z.string().max(DATA_URL_MAX_BYTES).optional(),
+  backdropR2Key: z.string().max(512).optional(),
+  backdropDataUrl: z.string().max(DATA_URL_MAX_BYTES).optional(),
+  composition: z.record(z.string(), z.unknown()),
+  exportProfileId: z.string().max(50),
+  nameOverlay: NameOverlaySchema,
+  firstName: z.string().max(100),
+  lastName: z.string().max(100),
+  index: z.number().int().min(0),
+}).refine(
+  (item) => Boolean(item.subjectR2Key || item.subjectDataUrl),
+  { message: "Each item must provide subjectR2Key or subjectDataUrl." },
+);
+
+const BatchStartSchema = z.object({
+  items: z.array(ServerBatchItemSchema).min(1).max(MAX_BATCH_ITEMS),
+  jobName: z.string().max(100).optional(),
+});
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
   const limit = await checkRateLimit(`batch-export:${ip}`, EXPORT_RATE_LIMIT_PER_MINUTE, 60_000);
@@ -315,6 +361,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { error: ErrorCodes.R2_RATE_LIMITED },
       { status: HTTP_STATUS[ErrorCodes.R2_RATE_LIMITED] },
+    );
+  }
+
+  // Reject requests that are clearly too large before JSON parsing (OOM guard).
+  // Max: 100 items × 2 images × ~26.7 MB base64 per 20 MB decoded ≈ 5.3 GB theoretical max.
+  // We cap the raw body at 50 MB which is more than enough for a realistic batch.
+  const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
+  const MAX_BODY_BYTES = 50 * 1024 * 1024; // 50 MB
+  if (contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: ErrorCodes.BATCH_INVALID_INPUT, message: "Request body too large." },
+      { status: HTTP_STATUS[ErrorCodes.BATCH_INVALID_INPUT] },
     );
   }
 
@@ -327,26 +385,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
 
   try {
-    const body = (await request.json()) as BatchStartRequest;
+    // Establish session before validation so all error responses carry the cookie
     sessionState = await getOrCreateSessionId();
 
-    if (!Array.isArray(body.items) || body.items.length === 0) {
+    const rawBody = await request.json();
+    const parseResult = BatchStartSchema.safeParse(rawBody);
+
+    if (!parseResult.success) {
       return withSessionCookie(
         NextResponse.json(
-          { error: ErrorCodes.BATCH_INVALID_INPUT, message: "items must be a non-empty array." },
+          { error: ErrorCodes.BATCH_INVALID_INPUT, message: parseResult.error.message },
           { status: HTTP_STATUS[ErrorCodes.BATCH_INVALID_INPUT] },
         ),
       );
     }
 
-    if (body.items.length > MAX_BATCH_ITEMS) {
-      return withSessionCookie(
-        NextResponse.json(
-          { error: ErrorCodes.BATCH_INVALID_INPUT, message: `Maximum ${MAX_BATCH_ITEMS} items per batch.` },
-          { status: HTTP_STATUS[ErrorCodes.BATCH_INVALID_INPUT] },
-        ),
-      );
-    }
+    const body = parseResult.data;
 
     const supabase = getSupabaseAdminClient();
     if (!supabase) {

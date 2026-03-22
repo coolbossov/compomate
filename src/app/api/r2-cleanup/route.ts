@@ -22,7 +22,7 @@ function getCleanupAccessError(request: NextRequest): NextResponse | null {
   return null;
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const accessError = getCleanupAccessError(request);
   if (accessError) return accessError;
 

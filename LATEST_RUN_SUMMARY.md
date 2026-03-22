@@ -1,66 +1,48 @@
-# CompoMate — Latest Run Summary
+# CompoMate — Latest Session Summary
 
-Last updated: 2026-03-20
-Repo: `compomate`
-Branch: `main` — commit `f1f93a7`
+**Date:** 2026-03-22  
+**Branch:** main  
+**Status:** All 13 upgrade items complete + 3 code-review follow-ups fixed + 2 Supabase migrations applied
 
-## Live URLs
+---
 
-| URL | Status | Notes |
-|-|-|-|
-| `https://composite.sapicture.day` | ✅ Working | HTTP 200, title=CompoMate |
-| `https://app.sapicture.day` | ✅ Working | CF Worker custom domain |
-| `https://compomate-sapd.vercel.app` | ✅ Working | Vercel alias |
+## What shipped this session
 
-## Build Status
+### Supabase migrations (both now live)
+Applied via `npx supabase db push`:
+- `compomate_batch_jobs` table — RLS enabled, service_role policy
+- `expires_at` column on `compomate_r2_objects` — backfilled, indexed
 
-| Check | Result |
-|-|-|
-| Tests | 339 passed, 0 failed |
-| TypeScript | 0 errors |
-| Lint | 0 errors |
-| Vulnerabilities | 0 |
-| Next.js | 16.2.0 |
+### Code review follow-ups
+1. **OOM guard** — `dataUrlToBuffer()` in batch start route now rejects data URLs > 20 MB
+2. **Zod validation** — full schema validation (`BatchStartSchema`, `ServerBatchItemSchema`, `NameOverlaySchema`) on all batch request fields; replaced manual array checks
+3. **GET → POST** — `r2-cleanup` route changed to POST (correct HTTP semantics for destructive ops); n8n workflow JSON updated to match
 
-## What was done this session (P0–P2 audit plan)
+---
 
-| Item | File(s) | Status |
-|-|-|-|
-| ESLint ignore `.open-next/**` + `.wrangler/**` | `eslint.config.mjs` | ✅ |
-| `middleware.ts` → `proxy.ts` + test rename | `src/proxy.ts`, `src/proxy.test.ts` | ✅ |
-| Next.js 16.1.6 → 16.2.0 + `npm audit fix` | `package.json` | ✅ |
-| CF Workers dual-target config removed | `package.json`, `next.config.ts`, deleted `open-next.config.ts` + `wrangler.jsonc` | ✅ |
-| Unused deps removed (`@uppy/*` ×5, `react-hook-form`, `next-themes`) | `package.json` | ✅ |
-| CSV roster import → PapaParse | `src/components/panels/RosterImportPanel.tsx` | ✅ |
-| Rate limiter → Upstash Redis (in-memory fallback) | `src/lib/server/rate-limit.ts` | ✅ |
-| Crop preview fidelity (active profile mask + badge) | `src/components/workspace/DangerZoneOverlay.tsx` | ✅ |
-| PostHog event tracking (5 events) | `src/lib/client/posthog.ts`, ExportPanel, FilePanel, BackdropPanel | ✅ |
-| Uptime Kuma monitor #93 created | Kuma (external) | ✅ |
-| All API routes: `await checkRateLimit(...)` | All route files | ✅ |
-| All route tests: `mockResolvedValue` | All route test files | ✅ |
+## System state
 
-## Pending (Next Session)
+- **Build:** clean (0 errors, 0 warnings)
+- **Tests:** 339/339 passing
+- **Supabase:** compomate_batch_jobs + expires_at column both live
 
-1. **Action required:** Set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` in Vercel env vars (free Upstash tier) to activate distributed rate limiting
-2. Item 4 (P2): Server-side batch export job queue
-3. Item 8 (P2): BackdropPanel decomposition into sub-components
-4. Item 9 (P3): R2 object lifecycle / cleanup
+---
 
-## Architecture Notes
+## Pending operator actions
 
-- `src/proxy.ts` — Next.js proxy (not `middleware.ts`); handles auth header forwarding
-- `src/lib/server/rate-limit.ts` — Upstash Redis when env vars present; in-memory Map fallback otherwise
-- `src/lib/client/posthog.ts` — `captureEvent(name, props?)` wrapper; events: `subjects_imported`, `roster_loaded`, `backdrop_generated`, `export_completed`, `batch_export_completed`
-- CF Workers removed entirely — Vercel-only deployment
-- Kuma monitor #93: keyword `"status":"ok"` on `/api/diagnostics` every 5 min with `x-diagnostics-token` header
-- `src/lib/server/r2.ts` — when `R2_WORKER_URL` is set, all R2 ops route through CF Worker (no S3 creds needed)
+1. **Vercel** → add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (free Upstash tier)
+   - Without these, rate limiting uses per-instance in-memory fallback (functional but not distributed)
+2. **n8n** → import `supabase/r2-cleanup-workflow.json` and activate (daily R2 cleanup at 02:00 UTC)
+   - Set env vars: `COMPOMATE_APP_URL`, `COMPOMATE_DIAGNOSTICS_TOKEN`
 
-## Vercel project
+---
 
-Project ID: `prj_RBAWgaqCRkd6rG6gMJvtZk0XDnGv`
-Team: `team_YpTZ9wntL6ct8x63gWi4SiAI`
-Production URL: https://composite.sapicture.day
+## Key paths
 
-## Supabase
-
-Project ref: `dlaaibvipvevtwolpdua` · Region: us-east-1 · 3 migrations applied
+```
+src/app/api/batch-export/start/route.ts              # Zod + OOM guard
+src/app/api/r2-cleanup/route.ts                      # GET → POST
+supabase/migrations/20260322_add_expires_at_to_r2_objects.sql
+supabase/migrations/20260322001_create_batch_jobs.sql
+supabase/r2-cleanup-workflow.json                    # n8n workflow (POST)
+```

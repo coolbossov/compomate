@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "method": "GET",
+        "method": "POST",
         "url": "={{ $env.COMPOMATE_APP_URL }}/api/r2-cleanup",
         "sendHeaders": true,
         "headerParameters": {
@@ -57,6 +57,6 @@
     "executionOrder": "v1"
   },
   "meta": {
-    "description": "Runs daily at 02:00 UTC. Calls GET /api/r2-cleanup with x-cleanup-token header to delete expired R2 objects. Requires env vars: COMPOMATE_APP_URL, COMPOMATE_DIAGNOSTICS_TOKEN."
+    "description": "Runs daily at 02:00 UTC. Calls POST /api/r2-cleanup with x-cleanup-token header to delete expired R2 objects. Requires env vars: COMPOMATE_APP_URL, COMPOMATE_DIAGNOSTICS_TOKEN."
   }
 }
