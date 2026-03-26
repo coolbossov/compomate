@@ -19,7 +19,7 @@ Professional volume photography composite tool. Takes cutout subject photos (dan
 
 ## Architecture notes
 
-- Stack: Next.js (App Router), Tailwind v4, shadcn/ui, Supabase, Sharp, Vercel
+- Stack: Next.js 16.2 (App Router), Tailwind v4, shadcn/ui, Supabase, Sharp, Vercel
 - The codebase was a monolith (`page.tsx` at 2345 lines) — if refactoring, extract to components/ and types/ directories
 - Core compositing pipeline lives in `export/route.ts`
 - KB: `~/Github/ai-brain/30-Projects/Active/CompoMate/`
