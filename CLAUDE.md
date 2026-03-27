@@ -10,6 +10,13 @@ Professional volume photography composite tool. Takes cutout subject photos (dan
 - Not a retouching tool — no masking, no skin smoothing, no manual cutout
 - Not a delivery platform — export only; delivery to clients is out of scope
 
+## Git workflow (enforced — no exceptions)
+
+- **Never commit directly to `main`** — all code changes go through a branch + PR
+- **Auto-branch on first code edit** — the moment a session transitions from research/planning to implementation, create a branch before the first file edit. Use prefix conventions: `feat/`, `fix/`, `chore/`, `docs/`
+- **End of session** — run `@review-2-code-commit` before pushing. This triggers the `opencode-review` GitHub Action on the PR automatically
+- CI passes → PR is squash-merged automatically and branch is deleted
+
 ## Hard rules
 
 - Sharp is the compositing engine — do not replace with Canvas API or browser-side processing for batch work
