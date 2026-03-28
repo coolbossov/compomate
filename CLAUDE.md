@@ -24,6 +24,16 @@ Professional volume photography composite tool. Takes cutout subject photos (dan
 - Batch ZIP export must remain a core feature — never remove it
 - All Claude/AI calls go through CLIProxyAPI — never direct to `api.anthropic.com`
 
+## CI / Testing
+
+- **3-job CI pipeline**: `check` (lint+tsc+build) → `e2e` (PR-only, Playwright) → `auto-merge`
+- **Vitest unit tests** run inside `check` job (`npm run test`)
+- **`e2e` job builds then starts** production server (`npm run build && npm run start`) — not dev server
+- **`auto-merge` uses `always()` pattern** — required because `e2e` is skipped on push to main
+- **3 GitHub Secrets required** for E2E: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- **No auth in E2E tests** — CompoMate uses session-cookie auth; tests verify public shell + API response codes only
+- **Canvas tests are limited** — Konva canvas requires real assets; E2E only verifies app shell loads and APIs respond
+
 ## Architecture notes
 
 - Stack: Next.js 16.2 (App Router), Tailwind v4, shadcn/ui, Supabase, Sharp, Vercel

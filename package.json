@@ -11,7 +11,10 @@
     "test:watch": "vitest",
     "test:smoke": "npm run lint && npm run test && npm run build",
     "test:diag": "curl -sf https://app.sapicture.day/api/diagnostics",
-    "audit": "npm audit --omit=dev"
+    "audit": "npm audit --omit=dev",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1004.0",
@@ -59,6 +62,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
