@@ -22,7 +22,7 @@ export interface EnvConfig {
   SENTRY_AUTH_TOKEN?: string;
   SENTRY_ORG?: string;
   SENTRY_PROJECT?: string;
-  NEXT_PUBLIC_POSTHOG_KEY?: string;
+  NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN?: string;
   NEXT_PUBLIC_POSTHOG_HOST?: string;
 }
 
@@ -90,7 +90,7 @@ export function validateEnv(): EnvConfig {
     SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
     SENTRY_ORG: process.env.SENTRY_ORG,
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
-    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   };
 }

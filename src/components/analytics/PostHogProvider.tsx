@@ -1,21 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-import { initPostHog, posthog } from '@/lib/client/posthog';
+// PostHog is initialised in instrumentation-client.ts (Next.js 15.3+ pattern).
+// Pageviews are automatic via defaults: '2026-01-30' → capture_pageview: 'history_change'.
+// This wrapper exists so child components can use the usePostHog() hook.
+
+import posthog from 'posthog-js';
+import { PostHogProvider as PHProvider } from 'posthog-js/react';
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    initPostHog();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      posthog.capture('$pageview', { $current_url: window.location.href });
-    }
-  }, [pathname]);
-
-  return <>{children}</>;
+  return <PHProvider client={posthog}>{children}</PHProvider>;
 }
