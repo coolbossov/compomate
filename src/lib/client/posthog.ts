@@ -6,10 +6,19 @@ export function initPostHog() {
   if (initialized || typeof window === 'undefined') return;
   if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return;
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+    // Route via Next.js proxy rewrites to avoid adblocker interference
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? '/ingest',
-    person_profiles: 'identified_only',
+    ui_host: 'https://us.posthog.com',
+    // 'always' — CompoMate uses anonymous sessions (httpOnly cookie, no user auth),
+    // so we profile every device to track cross-session engagement.
+    person_profiles: 'always',
     capture_pageview: false,
     capture_pageleave: true,
+    // Session recording — mask form inputs to avoid capturing sensitive data
+    session_recording: {
+      maskAllInputs: true,
+      maskInputOptions: { password: true },
+    },
   });
   initialized = true;
 }

@@ -23,7 +23,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("font-sans", geist.variable, inter.variable)}>
       <head>
-        <link rel="preconnect" href="https://us.i.posthog.com" />
+        {/* PostHog routes via /ingest proxy rewrite — preconnect to upstream assets host */}
+        <link rel="preconnect" href="https://us-assets.i.posthog.com" />
         <link rel="preconnect" href="https://vitals.vercel-insights.com" />
       </head>
       <body className="antialiased">
