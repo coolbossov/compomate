@@ -14,6 +14,13 @@ Professional volume photography composite tool. Takes cutout subject photos (dan
 
 - **Never commit directly to `main`** — all code changes go through a branch + PR
 - **Auto-branch on first code edit** — the moment a session transitions from research/planning to implementation, create a branch before the first file edit. Use prefix conventions: `feat/`, `fix/`, `chore/`, `docs/`
+- **Docs update is part of every PR — not a follow-up** — any change that touches DB schema, API shape, data flows, auth, or architecture must update the relevant `docs/` file(s) in the same commit:
+  - New/altered DB columns or tables → `docs/database.md` (schema + migration history)
+  - Architecture or flow change → `docs/architecture.md`
+  - Design decision or trade-off → `docs/decisions.md` (add ADR, newest first)
+  - New integration or external dependency → `docs/integrations.md`
+  - New env var → `docs/environment.md`
+  - Any shipped change → `CHANGELOG.md` (add entry under today's date)
 - **End of session** — run `@review-2-code-commit` before pushing. This triggers the `opencode-review` GitHub Action on the PR automatically
 - CI passes → PR is squash-merged automatically and branch is deleted
 
