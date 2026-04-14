@@ -1,0 +1,5 @@
+{
+  "url": "https://compomate.vercel.app",
+  "expectedStatus": 200,
+  "notes": "Internal compositing tool. 200 = healthy."
+}

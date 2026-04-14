@@ -1,0 +1,77 @@
+name: Post-Deploy Verification
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Verify Production
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Smoke test (poll every 120s, 5 attempts)
+        id: smoke
+        run: |
+          if [ ! -f .smoke-test.json ]; then
+            echo "::error::Missing .smoke-test.json"
+            exit 1
+          fi
+          url=$(jq -r '.url' .smoke-test.json)
+          expected=$(jq -r '.expectedStatus // 200' .smoke-test.json)
+          echo "url=$url" >> $GITHUB_OUTPUT
+          for attempt in 1 2 3 4 5; do
+            echo "=== Attempt $attempt/5 — waiting 120s ==="
+            sleep 120
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$url")
+            echo "$url → HTTP $status (expected $expected)"
+            echo "status=$status" >> $GITHUB_OUTPUT
+            if [ "$status" = "$expected" ]; then
+              echo "Smoke test passed on attempt $attempt"
+              exit 0
+            fi
+          done
+          echo "::error::Failed all 5 attempts. Last: HTTP $status (expected $expected)"
+          exit 1
+
+      - name: Close deploy-failure issue on success
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          issue=$(gh issue list --repo "${{ github.repository }}" --label deploy-failure --state open --limit 1 --json number -q '.[0].number')
+          if [ -n "$issue" ]; then
+            gh issue close "$issue" --repo "${{ github.repository }}" -c "Smoke test passed. Auto-closing."
+          fi
+
+      - name: Create deploy-failure issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh issue list --repo "${{ github.repository }}" --label deploy-failure --state open --limit 1 --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body "Still failing after commit \`${{ github.sha }}\`. HTTP ${{ steps.smoke.outputs.status }} at ${{ steps.smoke.outputs.url }}"
+          else
+            gh issue create --repo "${{ github.repository }}" \
+              --title "Deploy smoke test failed" \
+              --label "deploy-failure" \
+              --body "Smoke test failed: ${{ steps.smoke.outputs.url }} returned HTTP ${{ steps.smoke.outputs.status }}
+
+          **Commit:** \`${{ github.sha }}\`
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          This issue will be auto-closed when a subsequent deploy passes."
+          fi
+
+      - name: Slack alert on failure
+        if: failure() && env.SLACK_DEPLOY_WEBHOOK != ''
+        env:
+          SLACK_DEPLOY_WEBHOOK: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+        run: |
+          curl -s -X POST "$SLACK_DEPLOY_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"🔴 *Deploy smoke test FAILED* for `${{ github.repository }}`\n${{ steps.smoke.outputs.url }} → HTTP ${{ steps.smoke.outputs.status }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"}'
