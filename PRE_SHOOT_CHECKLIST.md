@@ -7,7 +7,7 @@
 
 - [ ] `npm run test:diag` returns diagnostics JSON (status should be `ok` in production)
 - [ ] Latest `main` deployment is live on Vercel
-- [ ] Supabase project `dlaaibvipvevtwolpdua` is active
+- [ ] Supabase project `qnfafwqjjbgiaygrdcoc` (sapd-internal, MyStartup.me org) is active
 - [ ] R2 bucket `compomate-uploads` is accessible
 
 ## 1) Happy Path (20+ subjects)

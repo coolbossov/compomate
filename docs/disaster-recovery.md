@@ -1,6 +1,6 @@
 # CompoMate — Disaster Recovery
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-24
 
 ---
 
@@ -8,8 +8,8 @@
 
 **Hosting:** Vercel
 **Live URL:** https://app.sapicture.day
-**Database:** Supabase <!-- TODO: verify CompoMate Supabase project ref -->
-**File Storage:** Cloudflare R2 bucket `compomate-uploads`
+**Database:** Supabase project `qnfafwqjjbgiaygrdcoc` (`Portal-Route`, MyStartup.me org, us-east-2, free tier — shared with Portal + HELM). Restore runbook: `~/.claude/infra-details/restore-runbooks/portal-supabase.md` (same DB instance).
+**File Storage:** Cloudflare R2 bucket `compomate-uploads` — all user images live here, not in Supabase.
 **Repo:** github.com/coolbossov/compomate (private)
 
 ---
@@ -29,13 +29,16 @@
 
 ## Database Backup
 
-**Supabase tables at risk:** `compomate_sessions`, `compomate_templates`, `compomate_backdrops`, `compomate_usage_logs`
+**Supabase tables at risk:** `compomate_sessions`, `compomate_templates`, `compomate_backdrops`, `compomate_usage_logs`, `compomate_projects`, `compomate_r2_objects`, `compomate_batch_jobs`.
 
 **Note:** In Phase 1 with anonymous sessions disabled, there is minimal user data at risk in the DB. The critical data is in R2 (uploaded files).
 
+**Automated backup:** CompoMate tables are captured by the shared `Portal-Route` daily backup to R2 — see `~/.claude/infra-details/restore-runbooks/portal-supabase.md` (backup path `r2:sapd-portfolio/portal-backups/daily/YYYY-MM-DD/`). Filter for `compomate_*.json` files for selective restore.
+
 **Manual backup:**
 ```bash
-supabase db dump --linked > compomate_$(date +%Y%m%d).sql
+supabase db dump --linked --data-only --schema=public \
+  --table='compomate_*' > compomate_$(date +%Y%m%d).sql
 ```
 
 ---

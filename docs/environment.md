@@ -1,10 +1,12 @@
 # CompoMate — Environment Variables
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-24
 
-Copy `.env.example` to `.env.local` and fill in real values. Never commit `.env.local`.
+Copy `.env.example` to `.env.local` and fill in real values. Never commit `.env.local`. Local dev: run `vercel env pull .env.local --environment=development` to sync from Vercel.
 
 For CI/E2E (GitHub Actions), 3 secrets are required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+**Supabase project:** `qnfafwqjjbgiaygrdcoc` (name `Portal-Route`, org `MyStartup.me`, region `us-east-2`). Co-tenants: Portal + HELM share this free-tier project. Keepalive via Kuma monitor #121 (pings a Portal table — the DB instance is shared, so Portal pings keep CompoMate awake too). Prior ref `dlaaibvipvevtwolpdua` was retired 2026-04-24 and is scheduled to pause ~2026-04-26.
 
 | Variable | Service | Purpose | Required |
 |----------|---------|---------|---------|
