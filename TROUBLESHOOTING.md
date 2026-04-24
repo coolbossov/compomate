@@ -41,7 +41,7 @@ Look for `x-request-id` in response headers and use it in logs and Sentry.
 
 1. Vercel function logs (filter by `request_id`)
 2. Sentry issues (`sail-cq.sentry.io`)
-3. Supabase logs (`dlaaibvipvevtwolpdua.supabase.co`)
+3. Supabase logs (`qnfafwqjjbgiaygrdcoc.supabase.co`)
 4. Cloudflare R2 bucket (`compomate-uploads`)
 
 ## Error Codes

@@ -1,6 +1,20 @@
 # CompoMate — Architecture Decision Records
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-24
+
+---
+
+## [2026-04-24] Co-Tenant on Portal-Route Supabase, Images Stay on R2
+
+**Context:** CompoMate's prior Supabase project `dlaaibvipvevtwolpdua` (SApictureDay org) was retired when Portal + HELM migrated to the MyStartup.me free-tier project `qnfafwqjjbgiaygrdcoc`. CompoMate's Vercel env had already been rotated to the new ref; the only loose end was stale local config. Separate question: should CompoMate's DB live in its own free-tier project to isolate quota?
+
+**Decision:** CompoMate co-tenants on `qnfafwqjjbgiaygrdcoc` alongside Portal + HELM. All user-uploaded images stay on Cloudflare R2; Supabase holds only relational metadata. No third Supabase org/project for CompoMate today.
+
+**Why:** (1) Runtime already runs correctly against the new ref — no migration work required. (2) R2 keeps Supabase egress and storage near zero regardless of photo volume, so the 500MB shared free tier is not meaningfully stressed by CompoMate usage. (3) Fewer moving parts beats premature isolation. (4) Extraction to a separate project remains reversible — documented trigger: `compomate_*` tables > 100MB or total project > 300MB.
+
+**Alternatives considered:**
+- Create a third free-tier org/project for CompoMate — rejected: adds a keepalive monitor, a second set of creds, and a migration day for no present benefit. Re-evaluate if the quota trigger fires.
+- Move images into Supabase Storage — rejected: would consume the shared free-tier quota fast and add egress risk. R2 already solves this (see 2026-03-06 ADR).
 
 ---
 

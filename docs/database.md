@@ -1,8 +1,12 @@
 # CompoMate — Database
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-24
 
-**Supabase Project:** <!-- TODO: verify CompoMate Supabase project ref -->
+**Supabase Project:** `qnfafwqjjbgiaygrdcoc` (name `Portal-Route`, org `MyStartup.me`, region `us-east-2`, free tier). Co-tenants with Portal + HELM — all three apps share this one 500MB project.
+
+**Images are NOT in Supabase.** All user-uploaded subjects, backdrops, and export results live in Cloudflare R2 (`compomate-uploads`). Supabase holds only small relational metadata: session state, template configs, backdrop records, usage/audit logs, R2 object index, batch job status. This keeps Supabase egress near zero regardless of photo volume.
+
+**Quota watch:** `compomate_usage_logs` and `compomate_batch_jobs` grow with traffic. Monthly size check is in `docs/backlog.md`. Trigger to extract CompoMate to its own free-tier project: `compomate_*` > 100MB OR total project size > 300MB.
 
 RLS is enabled on all tables. All tables allow full access via service role key only. Phase 1 design: `user_id` nullable everywhere (anonymous sessions). Auth planned for Phase 3.
 
