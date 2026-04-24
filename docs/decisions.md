@@ -16,7 +16,7 @@
 - Create a third free-tier org/project for CompoMate — rejected: adds a keepalive monitor, a second set of creds, and a migration day for no present benefit. Re-evaluate if the quota trigger fires.
 - Move images into Supabase Storage — rejected: would consume the shared free-tier quota fast and add egress risk. R2 already solves this (see 2026-03-06 ADR).
 
-**Addendum (2026-04-24):** Rather than letting the legacy `dlaaibvipvevtwolpdua` project auto-pause at 7d idle, it is being preserved via Kuma monitor #137 (6h HTTP ping against `compomate_r2_objects`). Legacy `compomate_*` tables remain in place on that project. Dropping them is optional and no longer time-gated.
+**Addendum (2026-04-24, final):** Legacy `dlaaibvipvevtwolpdua` project was **deleted** via Supabase Management API on 2026-04-24 after migration verified complete. Earlier same-day decision to preserve it via Kuma monitor #137 was reversed once user confirmed nothing depended on the old project. All legacy `compomate_*` tables were deleted with the project — irreversible, no restore path.
 
 ---
 
