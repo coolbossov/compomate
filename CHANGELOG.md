@@ -6,6 +6,11 @@
 
 ---
 
+## [2026-05-14] — Shared infra advisory workflow
+
+### Summary
+Added the repo infra-doc advisory workflow and updated `AGENTS.md` so shared infrastructure changes route through `~/.ai-ops/docs/infrastructure.md` and `/infra-update`.
+
 ## [Unreleased] — 2026-03-08 — Robust Reference Analysis (R2-backed)
 
 ### Summary
