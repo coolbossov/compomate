@@ -4,6 +4,13 @@
 
 Copy `.env.example` to `.env.local` and fill in real values. Never commit `.env.local`. Local dev: run `vercel env pull .env.local --environment=development` to sync from Vercel.
 
+## Operating Rules
+
+- Keep committed env documentation in this file and `.env.example`.
+- Keep raw secret values only in approved local, GitHub, Vercel, Supabase, Cloudflare, or provider secret stores.
+- Never commit service-role keys, R2 secrets, model keys, Sentry auth tokens, Redis tokens, or local env files.
+- When an env var is added, removed, renamed, or behaviorally changed, update this file in the same change.
+
 For CI/E2E (GitHub Actions), 3 secrets are required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 
 **Supabase project:** `qnfafwqjjbgiaygrdcoc` (name `Portal-Route`, org `MyStartup.me`, region `us-east-2`). Co-tenants: Portal + HELM share this free-tier project. Keepalive via Kuma monitor #121 (pings a Portal table — the DB instance is shared, so Portal pings keep CompoMate awake too). Prior ref `dlaaibvipvevtwolpdua` (SApictureDay org, name `internal-compomate-portal`) was retired from CompoMate runtime on 2026-04-24 but is **preserved, not paused** — kept alive by dedicated Kuma monitor #137 (6h HTTP ping) per user decision. Legacy `compomate_*` tables remain in place; dropping them is optional.

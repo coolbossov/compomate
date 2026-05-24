@@ -1,16 +1,29 @@
 # Testing
 
+## Email Testing Safety
+
+If this repo sends email in tests, local development, staging, or automation, never send to fake, random, or nonexistent recipients unless those exact addresses are already suppressed or otherwise blocked from delivery. Use real controlled test inboxes when delivery must be verified. If synthetic recipients are needed, suppress the generated addresses before repeated sends and check provider bounces before retrying.
+
 ## Quick checks
 
 Run these before opening or updating a PR:
 
 ```bash
-npm run lint
-npm run test
-npm run build
+npm run verify
 ```
 
-`npm run test:smoke` combines the same local gate into one command.
+`npm run verify` is the default readiness command. It currently delegates to `npm run test:smoke`, which runs lint, Vitest, and build.
+
+## Risk-Based Test Tiers
+
+Use the lightest tier that matches the change:
+
+| Tier | When to use | Verification |
+|-|-|-|
+| Docs-only | Documentation, checklists, or process-only changes | Review diff and run `git diff --check` |
+| Low | Copy, styling, or isolated UI/config changes | `npm run verify` |
+| Medium | Editor shell, uploads, Supabase, R2, analytics, or shared components | `npm run verify` plus targeted manual smoke or E2E |
+| High | Export/compositing, storage ownership, auth, production data, rate limiting, or payments if added later | `npm run verify`, targeted E2E/manual live smoke, rollback notes, and observability check |
 
 ## CI behavior
 

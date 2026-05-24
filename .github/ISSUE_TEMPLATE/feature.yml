@@ -1,0 +1,24 @@
+name: Feature
+description: Request a product or workflow improvement.
+title: "feat: "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired Outcome
+      description: What should be true when this is done?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Who needs this and why?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Timing, budget, systems, or risks.
