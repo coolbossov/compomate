@@ -1,10 +1,21 @@
 # CompoMate — Agent Work Log
 
+## 2026-05-24
+- test(rate-limit): isolate fallback limiter tests from local Upstash credentials so the readiness command is deterministic.
+- docs(dev-process): add the lightweight development standard with `npm run verify`, deployment, observability, and monthly health docs.
+
+- chore(repo-hygiene): add the shared small-developer GitHub hygiene baseline files.
+
 > This file is the persistent root changelog for this repo.
 > Update it for every important investigation, code change, and commit.
 > Format: newest entries at the top.
 
 ---
+
+## [2026-05-14] — Shared infra advisory workflow
+
+### Summary
+Added the repo infra-doc advisory workflow and updated `AGENTS.md` so shared infrastructure changes route through `~/.ai-ops/docs/infrastructure.md` and `/infra-update`.
 
 ## [Unreleased] — 2026-03-08 — Robust Reference Analysis (R2-backed)
 

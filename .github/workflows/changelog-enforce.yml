@@ -1,0 +1,38 @@
+name: Changelog Enforcement
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Enforce changelog update
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            FILES=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
+          else
+            FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+
+          echo "$FILES"
+
+          if [[ -z "$FILES" ]]; then
+            exit 0
+          fi
+
+          if echo "$FILES" | grep -qx "CHANGELOG.md"; then
+            exit 0
+          fi
+
+          echo "CHANGELOG.md must be updated for shipped or reviewable changes."
+          exit 1

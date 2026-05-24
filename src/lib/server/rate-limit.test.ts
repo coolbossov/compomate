@@ -1,13 +1,21 @@
-import { checkRateLimit, requestIp } from './rate-limit';
+import type * as RateLimit from './rate-limit';
+
+let checkRateLimit: typeof RateLimit.checkRateLimit;
+let requestIp: typeof RateLimit.requestIp;
 
 // ── checkRateLimit ──────────────────────────────────────────
 describe('checkRateLimit', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers();
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '');
+    vi.resetModules();
+    ({ checkRateLimit, requestIp } = await import('./rate-limit'));
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it('allows the first request with remaining = limit - 1', async () => {

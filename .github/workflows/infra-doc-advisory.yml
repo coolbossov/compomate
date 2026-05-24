@@ -1,0 +1,56 @@
+name: Infrastructure Docs Advisory
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  infra-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect likely infrastructure doc drift
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            FILES=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
+          else
+            FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+
+          echo "$FILES"
+
+          if [[ -z "$FILES" ]]; then
+            echo "No changed files detected." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          INFRA_HIT=0
+          if echo "$FILES" | grep -Eq '(^|/)\.github/workflows/|(^|/)wrangler\.toml$|(^|/)vercel\.json$|(^|/)supabase/|(^|/)Dockerfile$|(^|/)docker-compose|(^|/)coolify|(^|/)n8n|(^|/)launchd|(^|/)cron|(^|/)backup|(^|/)mcp'; then
+            INFRA_HIT=1
+          fi
+
+          DOCS_HIT=0
+          if echo "$FILES" | grep -Eq '^docs/(architecture|integrations|environment|testing|decisions|restore|infrastructure)\.md$|^docs/infrastructure/'; then
+            DOCS_HIT=1
+          fi
+
+          if [[ "$INFRA_HIT" -eq 1 && "$DOCS_HIT" -eq 0 ]]; then
+            {
+              echo "## Infrastructure docs advisory"
+              echo
+              echo "Infra-sensitive files changed without matching doc updates."
+              echo
+              echo "Suggested follow-up:"
+              echo "- update the relevant repo docs"
+              echo "- update central infra docs through /infra-update when the change affects shared operations"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No likely infrastructure doc drift detected." >> "$GITHUB_STEP_SUMMARY"
+          fi
