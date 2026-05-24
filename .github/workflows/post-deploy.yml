@@ -11,7 +11,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Smoke test (poll every 120s, 5 attempts)
         id: smoke
