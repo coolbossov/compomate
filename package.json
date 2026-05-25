@@ -33,7 +33,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@resvg/resvg-js": "^2.6.2",
     "@sentry/nextjs": "^10.53.1",
-    "@supabase/supabase-js": "^2.106.1",
+    "@supabase/supabase-js": "^2.106.2",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
