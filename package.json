@@ -63,7 +63,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^25",
     "@types/papaparse": "^5.5.2",
@@ -71,9 +71,9 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^9",
-    "eslint-config-next": "^16.2.0",
+    "eslint-config-next": "^16.2.6",
     "tailwindcss": "^4",
     "typescript": "^6",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.7"
   }
 }
