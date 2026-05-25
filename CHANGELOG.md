@@ -1,5 +1,8 @@
 # CompoMate — Agent Work Log
 
+## 2026-05-25
+- ci: pause Dependabot version-update PRs and reduce Actions minute usage with pull-request CI cancellation, docs-only skips, Dependabot E2E skips, 15-minute timeouts, and narrower infra advisory triggers.
+
 ## 2026-05-24
 - test(rate-limit): isolate fallback limiter tests from local Upstash credentials so the readiness command is deterministic.
 - docs(dev-process): add the lightweight development standard with `npm run verify`, deployment, observability, and monthly health docs.
