@@ -3,12 +3,39 @@ name: Infrastructure Docs Advisory
 on:
   pull_request:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "docs/architecture.md"
+      - "docs/integrations.md"
+      - "docs/environment.md"
+      - "docs/testing.md"
+      - "docs/decisions/**"
+      - "docs/infrastructure/**"
+      - "vercel.json"
+      - "wrangler.toml"
+      - "supabase/**"
+      - "Dockerfile"
+      - "docker-compose*"
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "docs/architecture.md"
+      - "docs/integrations.md"
+      - "docs/environment.md"
+      - "docs/testing.md"
+      - "docs/decisions/**"
+      - "docs/infrastructure/**"
+      - "vercel.json"
+      - "wrangler.toml"
+      - "supabase/**"
+      - "Dockerfile"
+      - "docker-compose*"
 
 jobs:
   infra-docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
