@@ -1,5 +1,9 @@
 # CompoMate — Agent Work Log
 
+## 2026-09-01
+- feat(background-studio): add a desktop-first Background Studio workspace with collapsible direction controls, visual style cards, team-level overlays, 1/2/3 subject guides, and direct access to the existing backdrop library and generation pipeline. This gives background planning a dedicated workflow without duplicating storage or claiming unfinished DAM, Drive, or organization-database integrations.
+- deploy(vercel): limit Git-triggered deployments to `main` with a recursive `**` branch rule so slash-containing feature branches and pull requests do not create preview or staging deployments; production remains the only Vercel target.
+
 ## 2026-05-25
 - ci: pause Dependabot version-update PRs and reduce Actions minute usage with pull-request CI cancellation, docs-only skips, Dependabot E2E skips, 15-minute timeouts, and narrower infra advisory triggers.
 

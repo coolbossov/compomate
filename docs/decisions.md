@@ -1,6 +1,26 @@
 # CompoMate — Architecture Decision Records
 
-**Last Updated:** 2026-04-24
+**Last Updated:** 2026-09-01
+
+---
+
+## [2026-09-01] Vercel Deployments Are Production-Only
+
+**Status:** Accepted
+
+CompoMate allows Git-triggered Vercel deployments only for `main`. The repository `vercel.json` sets `git.deploymentEnabled` to allow `main` and reject every other branch with `**`; the recursive minimatch is required so slash-containing feature branches are covered. GitHub Actions remain the pull-request verification path, and merging to `main` remains the production release trigger.
+
+This preserves the required branch-and-PR code review flow without creating pre-production Vercel environments. Manual Vercel commands must explicitly target the verified `sapd/compomate` production project.
+
+---
+
+## [2026-09-01] Background Studio Reuses the Existing Backdrop Pipeline
+
+**Status:** Accepted
+
+Background creation is a separate top-level workspace beside Composite, because its operator flow is direction → exploration → refinement rather than subject-by-subject compositing. The workspace reuses the current backdrop store and `BackdropPanel` so there is one library, one explicit paid-generation action, one R2 path, and one Supabase project-persistence path.
+
+The initial release does not add organization tables, authentication changes, model-tier orchestration, automatic high-resolution finalization, DAM publishing, or Google Drive publishing. Controls that depend on those systems are not represented as completed integrations. This keeps the first release useful and truthful while preserving clean later extension points.
 
 ---
 
