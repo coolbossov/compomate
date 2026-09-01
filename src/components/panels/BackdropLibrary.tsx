@@ -94,8 +94,8 @@ export function BackdropLibrary({
       <div
         className={`rounded-lg border-2 border-dashed transition-colors p-4 text-center cursor-pointer ${
           isDragOver
-            ? 'border-[#6367FF] bg-[#6367FF]/10 text-[#6367FF]'
-            : 'border-[color:var(--panel-border)] text-[var(--text-soft)] hover:border-[#6367FF]/50'
+            ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]'
+            : 'border-[color:var(--panel-border)] text-[var(--text-soft)] hover:border-[var(--brand-secondary)]'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -126,8 +126,8 @@ export function BackdropLibrary({
               key={backdrop.id}
               className={`group relative rounded-lg overflow-hidden border-2 cursor-pointer transition-colors ${
                 backdrop.id === activeBackdropId
-                  ? 'border-[#6367FF]'
-                  : 'border-[color:var(--panel-border)] hover:border-[#6367FF]/50'
+                  ? 'border-[var(--brand-secondary)] ring-2 ring-[var(--brand-primary)]'
+                  : 'border-[color:var(--panel-border)] hover:border-[var(--brand-secondary)]'
               }`}
               onClick={() => {
                 // Click active backdrop again to deselect it
@@ -152,7 +152,7 @@ export function BackdropLibrary({
               >
                 ✕
               </button>
-              <p className="truncate px-1 pb-1 pt-0.5 text-[10px] text-[var(--text-soft)] bg-black/40">
+              <p className="truncate bg-black/55 px-1 pb-1 pt-0.5 text-[10px] text-white">
                 {backdrop.name}
               </p>
             </div>

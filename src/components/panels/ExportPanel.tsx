@@ -103,7 +103,7 @@ function ToggleControl({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs text-[var(--text-primary)]">
+    <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs text-[var(--text-primary)]">
       <input
         type="checkbox"
         className="h-4 w-4 accent-[var(--brand-primary)]"
@@ -644,7 +644,7 @@ export function ExportPanel() {
     <div className="space-y-4">
       {/* Queue Summary Bar */}
       {batchItems.length > 0 && (
-        <div className="flex items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs">
+        <div className="flex items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs">
           <span className="text-green-400 font-semibold">✓ {queueSummary.done}</span>
           <span className="text-blue-400 animate-pulse font-semibold">● {queueSummary.running}</span>
           <span className="text-gray-400 font-semibold">○ {queueSummary.pending}</span>
@@ -697,7 +697,7 @@ export function ExportPanel() {
         <ToggleControl label="Show safe area overlay" checked={showSafeArea} onChange={setShowSafeArea} />
 
         {/* Lock Settings Toggle */}
-        <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs text-[var(--text-primary)]">
+        <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs text-[var(--text-primary)]">
           {lockSettings ? (
             <Lock className="h-3.5 w-3.5 text-[var(--brand-primary)]" />
           ) : (
@@ -716,7 +716,7 @@ export function ExportPanel() {
         <p className="text-xs text-[var(--text-soft)]">{activeProfile.description}</p>
 
         {/* File naming preview */}
-        <p className="truncate rounded bg-white/4 px-2 py-1 font-mono text-[10px] text-[var(--text-soft)]">
+        <p className="truncate rounded bg-[#f3f3f5] px-2 py-1 font-mono text-[10px] text-[var(--text-soft)]">
           {filenamePreview}
         </p>
 
@@ -823,7 +823,7 @@ export function ExportPanel() {
         </button>
 
         {serverBatchProgress && (
-          <div className="rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs">
+          <div className="rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[var(--text-soft)]">
                 {serverBatchProgress.status === 'done'

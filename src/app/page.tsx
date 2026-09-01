@@ -20,7 +20,7 @@ export default function Home() {
 
   return (
     <KeyboardShortcutsProvider>
-      <div className="min-h-screen bg-[var(--studio-bg)] text-[var(--text-primary)]">
+      <div className="min-h-screen bg-[var(--studio-bg)] text-[var(--text-primary)]" data-theme="minimal-canvas" data-testid="minimal-canvas-shell">
         <AppHeader workspace={workspace} onWorkspaceChange={setWorkspace} />
         <ShortcutsOverlay />
         <SessionResumeDialog />
@@ -28,7 +28,7 @@ export default function Home() {
 
         {workspace === 'composite' ? (
           <main
-            className="grid h-[calc(100vh-56px)] min-h-[780px] grid-cols-[320px_minmax(0,1fr)_360px] gap-4 p-4"
+            className="grid h-[calc(100vh-52px)] min-h-[720px] grid-cols-[280px_minmax(0,1fr)_320px] gap-2 p-2"
             data-testid="composite-workspace"
           >
             <LeftSidebar />

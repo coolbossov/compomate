@@ -36,7 +36,7 @@ export function ShortcutsOverlay() {
       }}
     >
       <DialogContent
-        className="w-full max-w-md bg-[#13131A] text-[var(--text-primary)] ring-1 ring-[#2A2A38]"
+        className="w-full max-w-md bg-[var(--panel-bg)] text-[var(--text-primary)] ring-1 ring-[var(--panel-border)]"
         showCloseButton
       >
         <DialogHeader>
@@ -66,8 +66,8 @@ export function ShortcutsOverlay() {
                     <kbd
                       key={`${shortcutKey}-${k}-${ki}`}
                       style={{
-                        background: '#2A2A38',
-                        border: '1px solid #3A3A4A',
+                        background: '#f3f3f5',
+                        border: '1px solid var(--panel-border)',
                         borderRadius: 4,
                         padding: '2px 6px',
                         fontFamily: 'monospace',

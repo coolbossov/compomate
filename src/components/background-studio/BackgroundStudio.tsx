@@ -1,7 +1,15 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { ChevronDown, ImageIcon, Search, Sparkles, Upload } from 'lucide-react';
+import {
+  ChevronDown,
+  ImageIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  Sparkles,
+  Upload,
+} from 'lucide-react';
 import { BackdropPanel } from '@/components/panels/BackdropPanel';
 import { useActiveBackdrop, useBackdrops } from '@/lib/store/selectors';
 import { useStore } from '@/lib/store';
@@ -35,22 +43,21 @@ interface BackgroundStudioProps {
   onUseInComposite: () => void;
 }
 
-function ControlSection({ title, summary, children, open = false }: {
+function ControlSection({ title, summary, children }: {
   title: string;
   summary: string;
   children: React.ReactNode;
-  open?: boolean;
 }) {
   return (
-    <details className="group border-b border-[color:var(--panel-border)] py-3" open={open}>
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-        <span>
-          <span className="block text-sm font-semibold text-white">{title}</span>
-          <span className="block text-[11px] text-[var(--text-soft)]">{summary}</span>
+    <details className="group border-b border-[color:var(--panel-border)]" data-testid="inspector-section">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-[#fff7fe]">
+        <span className="min-w-0">
+          <span className="block text-sm font-medium text-[var(--text-primary)]">{title}</span>
+          <span className="block truncate text-[10px] text-[var(--text-soft)]">{summary}</span>
         </span>
-        <ChevronDown className="h-4 w-4 text-[var(--brand-soft)] transition-transform group-open:rotate-180" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-[var(--brand-soft)] transition-transform group-open:rotate-180" />
       </summary>
-      <div className="pt-3">{children}</div>
+      <div className="border-t border-[color:var(--panel-border)] bg-[#fcfcfd] p-3">{children}</div>
     </details>
   );
 }
@@ -64,8 +71,8 @@ function SubjectGuides({ count }: { count: 1 | 2 | 3 }) {
       style={{ left, zIndex: count - index }}
       data-testid="subject-guide"
     >
-      <div className="mx-auto h-9 w-9 rounded-full border-2 border-dashed border-white/70 bg-white/5" />
-      <div className="mt-1 h-36 w-20 rounded-[45%_45%_18%_18%] border-2 border-dashed border-white/70 bg-white/5" />
+      <div className="mx-auto h-9 w-9 rounded-full border-2 border-dashed border-white/80 bg-black/5 shadow-sm" />
+      <div className="mt-1 h-36 w-20 rounded-[45%_45%_18%_18%] border-2 border-dashed border-white/80 bg-black/5 shadow-sm" />
     </div>
   ));
 }
@@ -75,6 +82,7 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
   const backdrops = useBackdrops();
   const showToast = useStore((state) => state.showToast);
   const libraryRef = useRef<HTMLElement>(null);
+  const [libraryOpen, setLibraryOpen] = useState(true);
   const [organizationName, setOrganizationName] = useState('St. James Mustangs');
   const [newOrganizationConfirmed, setNewOrganizationConfirmed] = useState(false);
   const [activity, setActivity] = useState<(typeof ACTIVITIES)[number]>('Volleyball');
@@ -93,7 +101,8 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
   const isUnconfirmedNewOrganization = organizationName.trim().length > 0 && !savedOrganization && !newOrganizationConfirmed;
 
   function openLibrary(message: string) {
-    libraryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setLibraryOpen(true);
+    requestAnimationFrame(() => libraryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     showToast(message);
   }
 
@@ -104,20 +113,111 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
     setIncludeLogo(true);
   }
 
+  const desktopColumns = libraryOpen
+    ? 'xl:grid-cols-[300px_minmax(520px,1fr)_320px]'
+    : 'xl:grid-cols-[72px_minmax(520px,1fr)_320px]';
+
   return (
     <main
-      className="grid min-h-[calc(100vh-56px)] grid-cols-1 gap-4 overflow-auto p-4 xl:h-[calc(100vh-56px)] xl:min-h-[780px] xl:grid-cols-[340px_minmax(520px,1fr)_380px] xl:overflow-hidden"
+      className={`grid min-h-[calc(100vh-52px)] grid-cols-1 gap-2 overflow-auto p-2 xl:h-[calc(100vh-52px)] xl:min-h-[720px] ${desktopColumns} xl:overflow-hidden`}
       data-testid="background-studio-workspace"
+      data-layout="minimal-canvas"
     >
-      <aside className="panel overflow-y-auto" aria-label="Background controls">
-        <div className="mb-2">
-          <p className="panel-title">Background direction</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--text-soft)]">
-            Set the direction, explore options, refine one choice, then finish one production master.
-          </p>
+      <aside ref={libraryRef} className="panel order-2 overflow-y-auto !p-0 xl:order-none" aria-label="Background library and generation">
+        <div className="sticky top-0 z-10 flex min-h-12 items-center justify-between border-b border-[color:var(--panel-border)] bg-white px-3">
+          {libraryOpen && (
+            <div className="min-w-0">
+              <p className="text-xs font-semibold">Library</p>
+              <p className="truncate text-[10px] text-[var(--text-soft)]">{backdrops.length} this session</p>
+            </div>
+          )}
+          <button
+            type="button"
+            className="btn-secondary ml-auto flex h-7 w-7 items-center justify-center p-0"
+            onClick={() => setLibraryOpen((open) => !open)}
+            aria-label={libraryOpen ? 'Collapse library' : 'Expand library'}
+            aria-expanded={libraryOpen}
+          >
+            {libraryOpen ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+        <div className={libraryOpen ? 'block' : 'xl:hidden'}>
+          <BackdropPanel />
+        </div>
+        {!libraryOpen && (
+          <div className="hidden space-y-2 p-2 xl:block" aria-label="Collapsed background thumbnails">
+            {backdrops.slice(0, 7).map((backdrop) => (
+              <button
+                key={backdrop.id}
+                type="button"
+                className={`block aspect-[4/5] w-full overflow-hidden rounded-md border-2 ${activeBackdrop?.id === backdrop.id ? 'border-[var(--brand-secondary)]' : 'border-[color:var(--panel-border)]'}`}
+                onClick={() => useStore.getState().setActiveBackdrop(backdrop.id)}
+                title={backdrop.name}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={backdrop.objectUrl} alt="" className="h-full w-full object-cover" />
+              </button>
+            ))}
+            {backdrops.length === 0 && <ImageIcon className="mx-auto mt-4 h-5 w-5 text-[var(--text-soft)]" />}
+          </div>
+        )}
+      </aside>
+
+      <section className="order-1 flex min-h-[680px] flex-col xl:order-none xl:min-h-0" aria-label="Live composition preview">
+        <div className="flex min-h-0 flex-1 items-center justify-center px-2 pb-2 pt-1">
+          <div className="relative aspect-[4/5] w-full max-w-[620px] overflow-hidden rounded-md border border-[color:var(--panel-border)] bg-[linear-gradient(145deg,#ffffff_0%,#fbf0fa_44%,#e9e9ed_100%)] shadow-[0_12px_32px_rgba(31,31,38,.08)] xl:h-full xl:max-h-[calc(100vh-150px)] xl:w-auto xl:max-w-full" data-testid="background-preview">
+            {activeBackdrop ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={activeBackdrop.objectUrl} alt={activeBackdrop.name} className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              <div className="absolute inset-0 overflow-hidden">
+                <div className="absolute -left-1/4 bottom-[12%] h-[32%] w-[145%] -rotate-6 bg-[linear-gradient(90deg,transparent,#ffdbfd_35%,#f5bcee_62%,transparent)] opacity-75" />
+                <div className="absolute -right-[8%] top-[14%] h-52 w-52 rounded-full border-[28px] border-white/70" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center px-10 text-center text-[var(--text-soft)]">
+                  <ImageIcon className="mb-3 h-8 w-8 text-[var(--brand-soft)]" />
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">No background selected</p>
+                  <p className="mt-1 max-w-64 text-xs leading-5">Search the library or generate directions when the composition is ready.</p>
+                </div>
+              </div>
+            )}
+            <div className="absolute right-3 top-3 rounded-md border border-white/70 bg-white/85 px-2 py-1 text-[10px] font-medium text-[var(--text-primary)] shadow-sm backdrop-blur">{activity}</div>
+            {includeTeamName && organizationName.trim() && (
+              <div className="absolute left-0 right-0 top-[7%] text-center text-lg font-black uppercase tracking-[0.14em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.9)] sm:text-2xl">
+                {organizationName}
+              </div>
+            )}
+            {includeLogo && (
+              <div className="absolute right-[6%] top-[16%] flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/70 bg-emerald-900/85 text-xl font-black text-white shadow-lg">
+                {logoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoPreview} alt="Uploaded team logo" className="h-full w-full object-contain" />
+                ) : 'M'}
+              </div>
+            )}
+            <SubjectGuides count={poseCount} />
+          </div>
         </div>
 
-        <ControlSection title="Team or organization" summary={savedOrganization?.status ?? 'New local draft'} open>
+        <div className="mx-auto grid w-full max-w-[620px] grid-cols-1 gap-2 sm:grid-cols-3" data-testid="preview-actions">
+          <button type="button" className="btn-secondary flex items-center justify-center gap-2" onClick={() => openLibrary('Review the existing library before generating a new direction.')}>
+            <Search className="h-4 w-4" /> Search existing
+          </button>
+          <button type="button" className="btn-primary flex items-center justify-center gap-2" onClick={() => openLibrary('Choose AI Generate, confirm the prompt and model, then generate directions.')}>
+            <Sparkles className="h-4 w-4" /> Generate directions
+          </button>
+          <button type="button" className="btn-secondary" onClick={onUseInComposite} disabled={!activeBackdrop}>
+            Use in Composite
+          </button>
+        </div>
+      </section>
+
+      <aside className="panel order-3 overflow-y-auto !p-0 xl:order-none" aria-label="Background controls">
+        <div className="border-b border-[color:var(--panel-border)] px-3 py-3">
+          <p className="text-xs font-semibold">Background direction</p>
+          <p className="mt-1 text-[10px] leading-4 text-[var(--text-soft)]">Set direction, explore, refine, then finish one master.</p>
+        </div>
+
+        <ControlSection title="Team or organization" summary={savedOrganization?.status ?? 'New local draft'}>
           <label className="block text-xs text-[var(--text-soft)]" htmlFor="organization-name">Team or organization</label>
           <input
             id="organization-name"
@@ -131,21 +231,19 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
             {SAVED_ORGANIZATIONS.map((org) => <option key={org.id} value={org.name} />)}
           </datalist>
           {savedOrganization ? (
-            <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <div className="mt-3 rounded-md border border-[color:var(--panel-border)] bg-white p-3">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-emerald-200">Profile loaded</span>
+                <span className="font-semibold text-[var(--text-primary)]">Profile loaded</span>
                 <span className="text-[10px] text-[var(--text-soft)]">starter data</span>
               </div>
               <div className="mt-2 flex gap-2" aria-label="Team colors">
                 {savedOrganization.colors.map((color) => (
-                  <span key={color} className="h-7 w-7 rounded-full border border-white/30" style={{ background: color }} title={color} />
+                  <span key={color} className="h-7 w-7 rounded-full border border-black/15" style={{ background: color }} title={color} />
                 ))}
               </div>
             </div>
           ) : isUnconfirmedNewOrganization ? (
-            <button type="button" className="btn-secondary mt-2 w-full" onClick={() => setNewOrganizationConfirmed(true)}>
-              Confirm new organization
-            </button>
+            <button type="button" className="btn-secondary mt-2 w-full" onClick={() => setNewOrganizationConfirmed(true)}>Confirm new organization</button>
           ) : organizationName.trim() ? (
             <p className="mt-2 text-xs text-[var(--brand-soft)]">New organization confirmed for this local session.</p>
           ) : null}
@@ -155,34 +253,28 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
           </select>
         </ControlSection>
 
-        <ControlSection title="Style" summary={STYLES.find((item) => item.id === style)?.label ?? 'Choose a direction'} open>
+        <ControlSection title="Style" summary={STYLES.find((item) => item.id === style)?.label ?? 'Choose a direction'}>
           <div className="grid grid-cols-2 gap-2">
             {STYLES.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={`overflow-hidden rounded-lg border text-left ${style === item.id ? 'border-[var(--brand-primary)] ring-1 ring-[var(--brand-primary)]' : 'border-[color:var(--panel-border)]'}`}
+                className={`overflow-hidden rounded-md border text-left ${style === item.id ? 'border-[var(--brand-secondary)] ring-2 ring-[var(--brand-primary)]' : 'border-[color:var(--panel-border)]'}`}
                 onClick={() => setStyle(item.id)}
                 aria-pressed={style === item.id}
               >
                 <span className={`block h-16 bg-gradient-to-br ${item.swatch}`} />
-                <span className="block bg-black/25 px-2 py-1.5 text-[10px] text-white">{item.label}</span>
+                <span className="block bg-black/65 px-2 py-1.5 text-[10px] text-white">{item.label}</span>
               </button>
             ))}
           </div>
         </ControlSection>
 
-        <ControlSection title="Composition" summary={`${poseCount} subject ${poseCount === 1 ? 'guide' : 'guides'}`} open>
+        <ControlSection title="Composition" summary={`${poseCount} subject ${poseCount === 1 ? 'guide' : 'guides'}`}>
           <p className="mb-2 text-xs text-[var(--text-soft)]">Plan clear space for the final photographed subjects.</p>
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="Subject pose guides">
             {([1, 2, 3] as const).map((count) => (
-              <button
-                key={count}
-                type="button"
-                className={poseCount === count ? 'btn-primary' : 'btn-secondary'}
-                onClick={() => setPoseCount(count)}
-                aria-pressed={poseCount === count}
-              >
+              <button key={count} type="button" className={poseCount === count ? 'btn-primary' : 'btn-secondary'} onClick={() => setPoseCount(count)} aria-pressed={poseCount === count}>
                 {count} {count === 1 ? 'pose' : 'poses'}
               </button>
             ))}
@@ -203,68 +295,6 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={useCustomDirection} onChange={(event) => setUseCustomDirection(event.target.checked)} /> Add custom text</label>
           {useCustomDirection && <textarea className="input mt-3 min-h-24 resize-y" value={customDirection} onChange={(event) => setCustomDirection(event.target.value)} placeholder="Describe a specific mood, texture, prop, or visual idea…" />}
         </ControlSection>
-      </aside>
-
-      <section className="panel flex min-h-[680px] flex-col xl:min-h-0" aria-label="Live composition preview">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="panel-title">Live composition preview</p>
-            <p className="mt-1 text-xs text-[var(--text-soft)]">4:5 production frame • subject guides are not exported</p>
-          </div>
-          <div className="rounded-lg border border-[color:var(--panel-border)] px-2 py-1 text-[10px] text-[var(--brand-soft)]">{activity}</div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 items-center justify-center py-4">
-          <div className="relative aspect-[4/5] w-full max-w-[520px] overflow-hidden rounded-xl border border-[color:var(--panel-border)] bg-[radial-gradient(circle_at_50%_28%,rgba(99,103,255,.22),rgba(10,10,15,.96)_62%)] shadow-2xl xl:h-full xl:max-h-[calc(100vh-230px)] xl:w-auto xl:max-w-full" data-testid="background-preview">
-            {activeBackdrop ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={activeBackdrop.objectUrl} alt={activeBackdrop.name} className="absolute inset-0 h-full w-full object-cover" />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center px-10 text-center text-[var(--text-soft)]">
-                <ImageIcon className="mb-3 h-10 w-10 text-[var(--brand-secondary)]" />
-                <p className="text-sm font-semibold text-white">No background selected</p>
-                <p className="mt-1 text-xs leading-5">Search the existing library or open generation controls to create a direction.</p>
-              </div>
-            )}
-            {includeTeamName && organizationName.trim() && (
-              <div className="absolute left-0 right-0 top-[7%] text-center text-lg font-black uppercase tracking-[0.14em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.9)] sm:text-2xl">
-                {organizationName}
-              </div>
-            )}
-            {includeLogo && (
-              <div className="absolute right-[6%] top-[16%] flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/70 bg-emerald-900/85 text-xl font-black text-white shadow-lg">
-                {logoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoPreview} alt="Uploaded team logo" className="h-full w-full object-contain" />
-                ) : 'M'}
-              </div>
-            )}
-            <SubjectGuides count={poseCount} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 border-t border-[color:var(--panel-border)] pt-3">
-          <button type="button" className="btn-secondary flex items-center justify-center gap-2" onClick={() => openLibrary('Review the existing library before generating a new direction.')}>
-            <Search className="h-4 w-4" /> Search existing
-          </button>
-          <button type="button" className="btn-primary flex items-center justify-center gap-2" onClick={() => openLibrary('Choose AI Generate, confirm the prompt and model, then generate directions.')}>
-            <Sparkles className="h-4 w-4" /> Generate directions
-          </button>
-          <button type="button" className="btn-secondary" onClick={onUseInComposite} disabled={!activeBackdrop}>
-            Use in Composite
-          </button>
-        </div>
-      </section>
-
-      <aside ref={libraryRef} className="panel overflow-y-auto" aria-label="Background library and generation">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="panel-title">Library & generation</p>
-            <p className="mt-1 text-xs text-[var(--text-soft)]">{backdrops.length} available this session</p>
-          </div>
-          <span className="rounded-full border border-[color:var(--panel-border)] px-2 py-1 text-[10px] text-[var(--brand-soft)]">Explore 3 by default</span>
-        </div>
-        <BackdropPanel />
       </aside>
     </main>
   );

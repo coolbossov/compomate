@@ -186,8 +186,8 @@ export function FilePanel() {
       <div
         className={`rounded-lg border-2 border-dashed transition-colors p-4 text-center cursor-pointer ${
           isDragOver
-            ? 'border-[#6367FF] bg-[#6367FF]/10 text-[#6367FF]'
-            : 'border-[color:var(--panel-border)] text-[var(--text-soft)] hover:border-[#6367FF]/50'
+            ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]'
+            : 'border-[color:var(--panel-border)] text-[var(--text-soft)] hover:border-[var(--brand-secondary)]'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

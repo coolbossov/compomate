@@ -118,7 +118,7 @@ export function BackdropReferencePhotoTab({
 
       {/* Reference photo picker / preview */}
       <div
-        className="rounded-lg border-2 border-dashed border-[color:var(--panel-border)] hover:border-[#6367FF]/50 transition-colors p-3 text-center cursor-pointer"
+        className="cursor-pointer rounded-lg border-2 border-dashed border-[color:var(--panel-border)] p-3 text-center transition-colors hover:border-[var(--brand-secondary)]"
         onClick={handleRefPhotoSelect}
         role="button"
         aria-label="Upload reference photo"
@@ -131,7 +131,7 @@ export function BackdropReferencePhotoTab({
               className="mx-auto max-h-32 rounded object-contain"
             />
             <p className="text-[10px] text-[var(--text-soft)] truncate">{refPhotoName}</p>
-            <p className="text-[10px] text-[#6367FF]">
+            <p className="text-[10px] text-[var(--brand-soft)]">
               {isUploadingRefPhoto ? 'Uploading…' : refPhotoR2Key ? 'Ready to analyze' : 'Click to change'}
             </p>
           </div>

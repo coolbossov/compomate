@@ -126,7 +126,7 @@ export function NameEntryPanel() {
         />
         <input
           ref={lastNameRef}
-          className={`input transition-colors ${stickyLastName ? 'border-[#6367FF]' : ''}`}
+          className={`input transition-colors ${stickyLastName ? 'border-[var(--brand-secondary)]' : ''}`}
           placeholder="Last name"
           value={lastName}
           onChange={(e) => setLastName(e.target.value)}
@@ -148,7 +148,7 @@ export function NameEntryPanel() {
               style={{
                 fontFamily: 'PreviewLast',
                 fontSize: 16,
-                color: '#C9BEFF',
+                color: 'var(--brand-warm)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.1em',
               }}
@@ -168,8 +168,8 @@ export function NameEntryPanel() {
             onClick={() => setFontPair(pair.id as FontPairId)}
             className={`flex-1 rounded border px-2 py-1 text-xs transition-colors ${
               fontPairId === pair.id
-                ? 'border-[#6367FF] bg-[#6367FF]/15 text-[var(--text-primary)]'
-                : 'border-[color:var(--panel-border)] bg-transparent text-[var(--text-soft)] hover:border-[#6367FF]/50'
+                ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]'
+                : 'border-[color:var(--panel-border)] bg-transparent text-[var(--text-soft)] hover:border-[var(--brand-secondary)]'
             }`}
             aria-pressed={fontPairId === pair.id}
           >
@@ -180,12 +180,12 @@ export function NameEntryPanel() {
 
       {/* Sticky last name toggle */}
       <label
-        className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs text-[var(--text-primary)]"
+        className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs text-[var(--text-primary)]"
         title="Keep last name when switching to next file"
       >
         <div className="flex items-center gap-2">
           {stickyLastName && (
-            <Pin className="h-3 w-3 text-[#6367FF]" aria-hidden="true" />
+            <Pin className="h-3 w-3 text-[var(--brand-soft)]" aria-hidden="true" />
           )}
           <span>Sticky last name</span>
         </div>
@@ -198,7 +198,7 @@ export function NameEntryPanel() {
       </label>
 
       {/* Name overlay toggle */}
-      <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs text-[var(--text-primary)]">
+      <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs text-[var(--text-primary)]">
         <span>Name overlay</span>
         <Switch
           size="sm"

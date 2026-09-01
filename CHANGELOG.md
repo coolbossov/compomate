@@ -1,6 +1,7 @@
 # CompoMate — Agent Work Log
 
 ## 2026-09-01
+- feat(minimal-canvas): redesign the CompoMate editor shell around a clean, image-first Minimal Canvas layout, using the official `#FFDBFD` brand pink for active states and primary actions. Background Studio now places a collapsible library rail beside a dominant 4:5 preview and a collapsed right inspector while preserving the existing direction, guide, library, generation, and Composite workflows.
 - feat(background-studio): add a desktop-first Background Studio workspace with collapsible direction controls, visual style cards, team-level overlays, 1/2/3 subject guides, and direct access to the existing backdrop library and generation pipeline. This gives background planning a dedicated workflow without duplicating storage or claiming unfinished DAM, Drive, or organization-database integrations.
 - deploy(vercel): limit Git-triggered deployments to `main` with a recursive `**` branch rule so slash-containing feature branches and pull requests do not create preview or staging deployments; production remains the only Vercel target.
 
