@@ -11,7 +11,7 @@ import { uploadFileToR2 } from '@/lib/client/uploader';
 // ---------------------------------------------------------------------------
 
 interface BackdropReferencePhotoTabProps {
-  onGenerate: (body: Record<string, unknown>, filenamePrefix: string, setGenerating: (v: boolean) => void) => Promise<void>;
+  onGenerate: (body: Record<string, unknown>, filenamePrefix: string, setGenerating: (v: boolean) => void) => Promise<unknown>;
   isAnyGenerating: boolean;
   showToast: (msg: string) => void;
 }

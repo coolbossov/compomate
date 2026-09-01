@@ -43,8 +43,15 @@ export interface FalBackdropPendingPayload {
 
 export interface FalBackdropCompletedPayload {
   pending: false;
+  /** Legacy compatibility only; current production responses stream bytes separately. */
   dataUrl?: string;
   sourceUrl?: string;
+  images?: Array<{
+    dataUrl?: string;
+    sourceUrl: string;
+    width?: number;
+    height?: number;
+  }>;
   model: string;
 }
 

@@ -48,18 +48,25 @@ function uploadViaPut(
   contentType: string,
   onProgress?: (percent: number) => void,
 ): Promise<void> {
+  if (!onProgress) {
+    return fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: data,
+    }).then((response) => {
+      if (!response.ok) throw new Error(`R2 upload failed: HTTP ${response.status}`);
+    });
+  }
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);
     xhr.setRequestHeader("Content-Type", contentType);
 
-    if (onProgress) {
-      xhr.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable) {
-          onProgress(Math.round((event.loaded / event.total) * 100));
-        }
-      });
-    }
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    });
 
     xhr.addEventListener("load", () => {
       // R2 returns 200 for presigned PUTs

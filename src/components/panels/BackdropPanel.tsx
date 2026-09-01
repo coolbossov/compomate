@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { useBackdrops, useGeneration } from '@/lib/store/selectors';
 import {
   filesToBackdropAssets,
   dataUrlToBackdropAsset,
+  dataUrlToBlob,
+  blobToBackdropAsset,
   parseErrorText,
   wait,
   isProjectSnapshot,
@@ -28,6 +30,8 @@ import type {
 } from '@/types/export';
 import { isFalPending, isFalCompleted } from '@/types/export';
 import type { SerializedAsset, StoredProjectSummary } from '@/lib/shared/project-snapshot';
+import type { SerializedBackdropAsset } from '@/lib/shared/project-snapshot';
+import type { BackdropAsset } from '@/types/backdrop';
 import { BackdropLibrary } from './BackdropLibrary';
 import { BackdropAIGenerateTab } from './BackdropAIGenerateTab';
 import { BackdropReferencePhotoTab } from './BackdropReferencePhotoTab';
@@ -44,7 +48,12 @@ function isFalPayload(value: unknown): value is FalBackdropPendingPayload | FalB
 // Component
 // ---------------------------------------------------------------------------
 
-export function BackdropPanel() {
+export interface BackdropPanelHandle {
+  generateDirections: (prompt: string) => Promise<void>;
+  finishProductionMaster: () => Promise<void>;
+}
+
+export const BackdropPanel = forwardRef<BackdropPanelHandle>(function BackdropPanel(_, ref) {
   const backdrops = useBackdrops();
   const activeBackdropId = useStore((s) => s.activeBackdropId);
   const generation = useGeneration();
@@ -56,6 +65,9 @@ export function BackdropPanel() {
   const setGeneration = useStore((s) => s.setGeneration);
   const resetGeneration = useStore((s) => s.resetGeneration);
   const showToast = useStore((s) => s.showToast);
+  const backgroundStudio = useStore((s) => s.backgroundStudio);
+  const replaceBackgroundStudio = useStore((s) => s.replaceBackgroundStudio);
+  const activeBackdrop = backdrops.find((backdrop) => backdrop.id === activeBackdropId) ?? null;
 
   const objectUrlsRef = useRef(new Set<string>());
 
@@ -102,6 +114,7 @@ export function BackdropPanel() {
     if (assets.length === 0) { showToast(skipped[0] ?? 'No valid image files found.'); return; }
 
     for (const asset of assets) {
+      asset.persistenceStatus = 'pending';
       registerUrl(asset.objectUrl);
       addBackdrop(asset);
     }
@@ -116,8 +129,8 @@ export function BackdropPanel() {
       const asset = assets[i];
       if (!file || !asset) continue;
       uploadBlobToR2(file, file.name, 'backdrop')
-        .then(({ key }) => { updateBackdrop(asset.id, { r2Key: key }); })
-        .catch(() => { /* R2 upload failure is non-critical */ });
+        .then(({ key }) => { updateBackdrop(asset.id, { r2Key: key, persistenceStatus: 'ready' }); })
+        .catch(() => { updateBackdrop(asset.id, { persistenceStatus: 'error' }); });
     }
   }
 
@@ -131,6 +144,24 @@ export function BackdropPanel() {
     showToast('Backdrop removed.');
   }
 
+  async function retryBackdropSave(id: string): Promise<void> {
+    const asset = backdrops.find((backdrop) => backdrop.id === id);
+    if (!asset) return;
+    updateBackdrop(id, { persistenceStatus: 'pending' });
+    try {
+      const blob = await fetch(asset.objectUrl).then((response) => {
+        if (!response.ok) throw new Error('The local image could not be read.');
+        return response.blob();
+      });
+      const { key } = await uploadBlobToR2(blob, asset.name, 'backdrop');
+      updateBackdrop(id, { r2Key: key, persistenceStatus: 'ready' });
+      showToast('Asset saved. The project can now be restored later.');
+    } catch {
+      updateBackdrop(id, { persistenceStatus: 'error' });
+      showToast('Asset save failed again. Check storage settings or remove and regenerate this option.');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Shared fal.ai generation helper
   // ---------------------------------------------------------------------------
@@ -139,9 +170,10 @@ export function BackdropPanel() {
     body: Record<string, unknown>,
     filenamePrefix: string,
     setGenerating: (v: boolean) => void,
-  ): Promise<void> {
+    stage?: 'direction' | 'master',
+  ): Promise<BackdropAsset[]> {
     const prompt = String(body.prompt ?? '').trim();
-    if (!prompt) { showToast('Enter a prompt before generating.'); return; }
+    if (!prompt && body.mode !== 'master') { showToast('Enter a prompt before generating.'); return []; }
 
     setGenerating(true);
     resetGeneration();
@@ -185,44 +217,123 @@ export function BackdropPanel() {
         }
       }
 
-      if (!completed?.dataUrl) throw new Error('Backdrop still queued. Try again in a moment.');
+      const completedImages = completed?.images?.length
+        ? completed.images
+        : completed?.sourceUrl
+          ? [{ dataUrl: completed.dataUrl, sourceUrl: completed.sourceUrl }]
+          : [];
+      if (completedImages.length === 0) throw new Error('Backdrop still queued. Try again in a moment.');
 
-      const asset = await dataUrlToBackdropAsset(
-        `${filenamePrefix}_${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
-        completed.dataUrl,
-        prompt,
-      );
-      registerUrl(asset.objectUrl);
-      addBackdrop(asset);
-      setActiveBackdrop(asset.id);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const assets: BackdropAsset[] = [];
+      const assetBlobs: Blob[] = [];
+      for (let index = 0; index < completedImages.length; index += 1) {
+        const image = completedImages[index];
+        if (!image) continue;
+        const blob = image.dataUrl
+          ? dataUrlToBlob(image.dataUrl)
+          : await fetch(`/api/generate-backdrop/image?url=${encodeURIComponent(image.sourceUrl)}`, { cache: 'no-store' }).then(async (imageResponse) => {
+              if (!imageResponse.ok) throw new Error(parseErrorText(await imageResponse.text()));
+              return imageResponse.blob();
+            });
+        const asset = await blobToBackdropAsset(
+          `${filenamePrefix}_${index + 1}_${timestamp}.jpg`,
+          blob,
+          prompt,
+          {
+            source: stage === 'direction' ? 'ai-direction' : stage === 'master' ? 'ai-master' : body.model === 'ideogram' ? 'ai-ideogram' : 'ai-flux',
+            stage,
+            providerSourceUrl: image.sourceUrl,
+            persistenceStatus: 'pending',
+          },
+        );
+        asset.width = image.width ?? asset.width;
+        asset.height = image.height ?? asset.height;
+        registerUrl(asset.objectUrl);
+        addBackdrop(asset);
+        assets.push(asset);
+        assetBlobs.push(blob);
+      }
+      const selected = stage === 'direction' ? assets[0] : assets.at(-1);
+      if (selected) setActiveBackdrop(selected.id);
       setGeneration({ status: 'done' });
       captureEvent('backdrop_generated', {
         model: String(body.model ?? 'flux'),
         duration_ms: Date.now() - generationStartedAt,
       });
-      showToast('Generated backdrop added to library.');
+      showToast(stage === 'direction'
+        ? `${assets.length} directions generated. Select the strongest one to refine.`
+        : stage === 'master'
+          ? 'Production master finished and selected.'
+          : 'Generated backdrop added to library.');
 
-      // Upload to R2 in background
-      const blob = await fetch(asset.objectUrl).then((r) => r.blob());
-      uploadBlobToR2(blob, asset.name, 'backdrop')
-        .then(({ key }) => { updateBackdrop(asset.id, { r2Key: key }); })
-        .catch(() => { /* non-critical */ });
+      await Promise.all(assets.map(async (asset, index) => {
+        try {
+          const blob = assetBlobs[index];
+          if (!blob) throw new Error('Generated image payload is unavailable.');
+          const { key } = await uploadBlobToR2(blob, asset.name, 'backdrop');
+          updateBackdrop(asset.id, { r2Key: key, persistenceStatus: 'ready' });
+        } catch {
+          updateBackdrop(asset.id, { persistenceStatus: 'error' });
+        }
+      }));
+      return assets;
 
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Backdrop generation failed.';
       setGeneration({ status: 'error', error: message });
       showToast(message);
+      return [];
     } finally {
       setGenerating(false);
     }
   }
 
+  async function getRestorableSourceUrl(asset: BackdropAsset): Promise<string> {
+    if (asset.providerSourceUrl?.startsWith('https://')) return asset.providerSourceUrl;
+    if (!asset.r2Key) throw new Error('Wait for the selected direction to finish saving before creating the master.');
+    const response = await fetch(`/api/r2/download?key=${encodeURIComponent(asset.r2Key)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(parseErrorText(await response.text()));
+    const payload = (await response.json()) as { downloadUrl?: string };
+    if (!payload.downloadUrl?.startsWith('https://')) throw new Error('Stored direction download URL is unavailable.');
+    return payload.downloadUrl;
+  }
+
+  useImperativeHandle(ref, () => ({
+    async generateDirections(prompt: string) {
+      await runFalGeneration({ mode: 'directions', prompt, count: 3 }, 'direction', () => {}, 'direction');
+    },
+    async finishProductionMaster() {
+      if (!activeBackdrop) {
+        showToast('Select a direction before finishing the production master.');
+        return;
+      }
+      if (activeBackdrop.stage === 'master') {
+        showToast('This is already a production master.');
+        return;
+      }
+      try {
+        const sourceImageUrl = await getRestorableSourceUrl(activeBackdrop);
+        await runFalGeneration(
+          { mode: 'master', prompt: activeBackdrop.prompt ?? 'production background master', sourceImageUrl },
+          'production_master',
+          () => {},
+          'master',
+        );
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Production master could not be created.');
+      }
+    },
+  }));
+
   // ---------------------------------------------------------------------------
   // Projects (Supabase)
   // ---------------------------------------------------------------------------
 
-  const activeBackdrop = backdrops.find((b) => b.id === activeBackdropId) ?? null;
   const activeSubject = subjects.find((s) => s.id === activeSubjectId) ?? null;
+  const hasUnrestorableBackdrops = backdrops.some((backdrop) =>
+    !backdrop.r2Key && (backdrop.persistenceStatus === 'pending' || backdrop.source.startsWith('ai-')),
+  );
 
   async function serializeAsset(
     asset: { name: string; objectUrl: string; r2Key?: string } | null,
@@ -249,10 +360,30 @@ export function BackdropPanel() {
     };
   }
 
+  async function serializeBackdrop(asset: BackdropAsset): Promise<SerializedBackdropAsset> {
+    if ((asset.source.startsWith('ai-') || asset.stage) && !asset.r2Key) {
+      throw new Error(`“${asset.name}” is not saved to the asset library yet. Wait for upload to finish, then save the project.`);
+    }
+    const stored = await serializeAsset(asset);
+    if (!stored) throw new Error(`Could not prepare “${asset.name}” for project save.`);
+    return {
+      ...stored,
+      id: asset.id,
+      width: asset.width,
+      height: asset.height,
+      source: asset.source,
+      prompt: asset.prompt,
+      stage: asset.stage,
+      providerSourceUrl: asset.providerSourceUrl,
+      createdAt: asset.createdAt,
+    };
+  }
+
   async function buildSnapshot() {
-    const [serializedBackdrop, serializedSubject] = await Promise.all([
+    const [serializedBackdrop, serializedSubject, serializedBackdrops] = await Promise.all([
       serializeAsset(activeBackdrop),
       serializeAsset(activeSubject, activeSubject?.file),
+      Promise.all(backdrops.map(serializeBackdrop)),
     ]);
     return {
       version: PROJECT_SNAPSHOT_VERSION,
@@ -260,7 +391,12 @@ export function BackdropPanel() {
       lastName,
       nameStyle: nameStyleId,
       exportProfile: exportProfileId,
-      composition, activeBackdrop: serializedBackdrop, activeSubject: serializedSubject,
+      composition,
+      activeBackdrop: serializedBackdrop,
+      activeSubject: serializedSubject,
+      backdrops: serializedBackdrops,
+      activeBackdropId,
+      backgroundStudio,
     };
   }
 
@@ -293,7 +429,7 @@ export function BackdropPanel() {
         body: JSON.stringify({ name, snapshot }),
       });
       if (!response.ok) { const text = await response.text(); throw new Error(parseErrorText(text)); }
-      showToast('Project saved to Supabase.');
+      showToast('Project saved. You can reopen this complete workspace later.');
       await refreshProjects();
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Project save failed.');
@@ -326,13 +462,27 @@ export function BackdropPanel() {
       const snapshot = payload.project?.payload;
       if (!isProjectSnapshot(snapshot)) throw new Error('Stored project payload format is invalid.');
 
-      const nextBackdrop = snapshot.activeBackdrop
-        ? snapshot.activeBackdrop.r2Key
-          ? await r2KeyToBackdropAsset(snapshot.activeBackdrop.name, snapshot.activeBackdrop.r2Key)
-          : snapshot.activeBackdrop.dataUrl
-            ? await dataUrlToBackdropAsset(snapshot.activeBackdrop.name, snapshot.activeBackdrop.dataUrl)
-            : null
-        : null;
+      const serializedBackdrops = snapshot.version === PROJECT_SNAPSHOT_VERSION
+        ? snapshot.backdrops ?? []
+        : snapshot.activeBackdrop ? [snapshot.activeBackdrop] : [];
+      const nextBackdrops = await Promise.all(serializedBackdrops.map(async (stored) => {
+        const studioAsset = snapshot.version === PROJECT_SNAPSHOT_VERSION
+          ? stored as SerializedBackdropAsset
+          : null;
+        const metadata = studioAsset ? {
+          id: studioAsset.id,
+          source: studioAsset.source,
+          stage: studioAsset.stage,
+          providerSourceUrl: studioAsset.providerSourceUrl,
+          createdAt: studioAsset.createdAt,
+          width: studioAsset.width,
+          height: studioAsset.height,
+        } : undefined;
+        if (stored.r2Key) return r2KeyToBackdropAsset(stored.name, stored.r2Key, studioAsset?.prompt, metadata);
+        if (stored.dataUrl) return dataUrlToBackdropAsset(stored.name, stored.dataUrl, studioAsset?.prompt, metadata);
+        return null;
+      }));
+      const restoredBackdrops = nextBackdrops.filter((asset): asset is BackdropAsset => asset !== null);
       const nextSubject = snapshot.activeSubject
         ? snapshot.activeSubject.r2Key
           ? await r2KeyToAsset(snapshot.activeSubject.name, snapshot.activeSubject.r2Key)
@@ -344,12 +494,15 @@ export function BackdropPanel() {
       for (const b of backdrops) { if (objectUrlsRef.current.has(b.objectUrl)) { URL.revokeObjectURL(b.objectUrl); objectUrlsRef.current.delete(b.objectUrl); } }
       for (const s of subjects) { if (objectUrlsRef.current.has(s.objectUrl)) { URL.revokeObjectURL(s.objectUrl); objectUrlsRef.current.delete(s.objectUrl); } }
 
-      if (nextBackdrop) registerUrl(nextBackdrop.objectUrl);
+      for (const backdrop of restoredBackdrops) registerUrl(backdrop.objectUrl);
       if (nextSubject) registerUrl(nextSubject.objectUrl);
 
-      replaceBackdrops(nextBackdrop ? [nextBackdrop] : []);
+      replaceBackdrops(restoredBackdrops);
       replaceSubjects(nextSubject ? [nextSubject] : []);
-      setActiveBackdrop(nextBackdrop?.id ?? null);
+      const restoredActiveId = snapshot.version === PROJECT_SNAPSHOT_VERSION
+        ? snapshot.activeBackdropId ?? null
+        : restoredBackdrops[0]?.id ?? null;
+      setActiveBackdrop(restoredBackdrops.some((asset) => asset.id === restoredActiveId) ? restoredActiveId : restoredBackdrops[0]?.id ?? null);
       setActiveSubject(nextSubject?.id ?? null);
 
       setFirstName(snapshot.firstName);
@@ -357,6 +510,9 @@ export function BackdropPanel() {
       setNameStyle(snapshot.nameStyle);
       setExportProfile(snapshot.exportProfile);
       updateComposition(snapshot.composition);
+      if (snapshot.version === PROJECT_SNAPSHOT_VERSION && snapshot.backgroundStudio) {
+        replaceBackgroundStudio(snapshot.backgroundStudio);
+      }
       clearBatch();
       setProjectName(payload.project?.name ?? 'Session');
       showToast('Project loaded.');
@@ -395,6 +551,7 @@ export function BackdropPanel() {
               onAdd={handleBackdropFiles}
               onRemove={handleRemove}
               onSetActive={setActiveBackdrop}
+              onRetrySave={retryBackdropSave}
             />
           </TabsContent>
 
@@ -403,7 +560,7 @@ export function BackdropPanel() {
             <BackdropAIGenerateTab
               onGenerate={runFalGeneration}
               generation={generation}
-              isAnyGenerating={false}
+              isAnyGenerating={generation.status === 'generating' || generation.status === 'polling'}
             />
           </TabsContent>
 
@@ -411,16 +568,19 @@ export function BackdropPanel() {
           <TabsContent value="reference" className="space-y-3 pt-3">
             <BackdropReferencePhotoTab
               onGenerate={runFalGeneration}
-              isAnyGenerating={false}
+              isAnyGenerating={generation.status === 'generating' || generation.status === 'polling'}
               showToast={showToast}
             />
           </TabsContent>
         </Tabs>
       </section>
 
-      {/* ─── Projects (Supabase) section — unchanged ─── */}
+      {/* ─── Saved projects ─── */}
       <section className="space-y-3 p-4">
-        <h2 className="panel-title">Projects (Supabase)</h2>
+        <div>
+          <h2 className="panel-title">Saved projects</h2>
+          <p className="mt-1 text-[10px] leading-4 text-[var(--text-soft)]">Save directions, the selected design, overlays, and the production master so this workspace can be reopened later.</p>
+        </div>
         <input
           className="input"
           value={projectName}
@@ -432,9 +592,10 @@ export function BackdropPanel() {
             className="btn-secondary"
             type="button"
             onClick={() => { void saveProject(); }}
-            disabled={isSavingProject || supabaseConfigured !== true}
+            disabled={isSavingProject || supabaseConfigured !== true || hasUnrestorableBackdrops}
+            title={hasUnrestorableBackdrops ? 'Wait for generated assets to finish saving.' : undefined}
           >
-            {isSavingProject ? 'Saving...' : 'Save'}
+            {isSavingProject ? 'Saving…' : hasUnrestorableBackdrops ? 'Saving assets…' : 'Save project'}
           </button>
           <button
             className="btn-secondary"
@@ -442,7 +603,7 @@ export function BackdropPanel() {
             onClick={() => { void refreshProjects(); }}
             disabled={isLoadingProjects}
           >
-            Refresh
+            Refresh list
           </button>
         </div>
         <div className="asset-list">
@@ -474,4 +635,4 @@ export function BackdropPanel() {
       </section>
     </>
   );
-}
+});

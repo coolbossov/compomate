@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Minimal Canvas: light surfaces with SA Picture Day pink as the interaction highlight. */
   --font-sans-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono-ui: "SF Mono", "Menlo", "Consolas", monospace;
   --studio-bg: #f7f7f8;

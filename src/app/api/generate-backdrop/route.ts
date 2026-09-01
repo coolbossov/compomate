@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
-import { FAL_FLUX_MODEL, FAL_IDEOGRAM_MODEL, FAL_BACKDROP_ASPECT } from "@/lib/constants";
+import {
+  FAL_FLUX_MODEL,
+  FAL_DIRECTION_MODEL,
+  FAL_MASTER_MODEL,
+  FAL_IDEOGRAM_MODEL,
+  FAL_BACKDROP_ASPECT,
+  FAL_BACKDROP_WIDTH,
+  FAL_BACKDROP_HEIGHT,
+} from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,6 +19,9 @@ type GenerateBackdropBody = {
   aspectMode?: "portrait" | "landscape" | "square";
   model?: "flux" | "ideogram";
   styleType?: string; // Ideogram: REALISTIC | DESIGN | RENDER_3D | ANIME
+  mode?: "manual" | "directions" | "master";
+  count?: number;
+  sourceImageUrl?: string;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -26,8 +37,12 @@ type PendingFalJob = {
 
 type CompletedFalJob = {
   pending: false;
-  dataUrl: string;
   sourceUrl: string;
+  images: Array<{
+    sourceUrl: string;
+    width?: number;
+    height?: number;
+  }>;
   model: string;
 };
 
@@ -45,19 +60,30 @@ function resolveImageSize(aspectMode: GenerateBackdropBody["aspectMode"]): strin
   return "portrait_4_3";
 }
 
-function extractImageUrl(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
+type FalImage = { url: string; width?: number; height?: number };
+
+function extractImages(payload: unknown): FalImage[] {
+  if (!payload || typeof payload !== "object") return [];
   const value = payload as JsonObject;
 
   const candidateArrays = [value.images, value.output, value.results];
   for (const candidateArray of candidateArrays) {
     if (Array.isArray(candidateArray)) {
+      const images: FalImage[] = [];
       for (const item of candidateArray) {
         if (item && typeof item === "object") {
-          const url = (item as JsonObject).url;
-          if (typeof url === "string" && url.startsWith("http")) return url;
+          const image = item as JsonObject;
+          const url = image.url;
+          if (typeof url === "string" && url.startsWith("http")) {
+            images.push({
+              url,
+              width: typeof image.width === 'number' ? image.width : undefined,
+              height: typeof image.height === 'number' ? image.height : undefined,
+            });
+          }
         }
       }
+      if (images.length > 0) return images;
     }
   }
 
@@ -65,13 +91,26 @@ function extractImageUrl(payload: unknown): string | null {
   for (const candidate of candidateObjects) {
     if (candidate && typeof candidate === "object") {
       const direct = (candidate as JsonObject).url;
-      if (typeof direct === "string" && direct.startsWith("http")) return direct;
-      const nested = extractImageUrl(candidate);
-      if (nested) return nested;
+      if (typeof direct === "string" && direct.startsWith("http")) {
+        return [{ url: direct }];
+      }
+      const nested = extractImages(candidate);
+      if (nested.length > 0) return nested;
     }
   }
 
-  return null;
+  return [];
+}
+
+function completeImages(images: FalImage[], model: string): CompletedFalJob {
+  const completedImages = images.map((image) => ({
+    sourceUrl: image.url,
+    width: image.width,
+    height: image.height,
+  }));
+  const first = completedImages[0];
+  if (!first) throw new Error('fal completed but no image URL was returned.');
+  return { pending: false, sourceUrl: first.sourceUrl, images: completedImages, model };
 }
 
 function normalizeQueueUrl(value: string | undefined, fallback: string): string {
@@ -102,14 +141,6 @@ async function fetchJson(url: string, key: string): Promise<JsonObject> {
   });
   if (!response.ok) throw new Error(`fal polling failed (${response.status}).`);
   return (await response.json()) as JsonObject;
-}
-
-async function fetchToDataUrl(imageUrl: string): Promise<string> {
-  const response = await fetch(imageUrl, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Generated image download failed (${response.status}).`);
-  const mimeType = response.headers.get("content-type") ?? "image/png";
-  const binary = Buffer.from(await response.arrayBuffer());
-  return `data:${mimeType};base64,${binary.toString("base64")}`;
 }
 
 function extractStatusState(payload: JsonObject): string {
@@ -146,9 +177,9 @@ async function submitFluxJob(
     throw new Error(message);
   }
 
-  const directImage = extractImageUrl(enqueue.data);
-  if (directImage) {
-    return { pending: false, dataUrl: await fetchToDataUrl(directImage), sourceUrl: directImage, model: FAL_FLUX_MODEL };
+  const directImages = extractImages(enqueue.data);
+  if (directImages.length > 0) {
+    return completeImages(directImages, FAL_FLUX_MODEL);
   }
 
   const requestId =
@@ -166,6 +197,67 @@ async function submitFluxJob(
   );
 
   return { pending: true, requestId, statusUrl, responseUrl, queuePosition: extractQueuePosition(enqueue.data), model: FAL_FLUX_MODEL };
+}
+
+async function submitDirectionJob(
+  prompt: string,
+  count: number,
+  key: string,
+): Promise<PendingFalJob | CompletedFalJob> {
+  const endpoint = `${QUEUE_BASE}${FAL_DIRECTION_MODEL}`;
+  const enqueue = await falRequest(endpoint, key, {
+    prompt,
+    num_images: count,
+    image_size: { width: FAL_BACKDROP_WIDTH, height: FAL_BACKDROP_HEIGHT },
+    output_format: 'jpeg',
+    enable_safety_checker: true,
+  });
+  if (!enqueue.ok) {
+    const message = typeof enqueue.data.detail === 'string'
+      ? enqueue.data.detail
+      : `fal direction request failed (${enqueue.status}).`;
+    throw new Error(message);
+  }
+  const directImages = extractImages(enqueue.data);
+  if (directImages.length > 0) return completeImages(directImages, FAL_DIRECTION_MODEL);
+  return pendingFromEnqueue(enqueue.data, endpoint, FAL_DIRECTION_MODEL);
+}
+
+async function submitMasterJob(
+  sourceImageUrl: string,
+  key: string,
+): Promise<PendingFalJob | CompletedFalJob> {
+  const endpoint = `${QUEUE_BASE}${FAL_MASTER_MODEL}`;
+  const enqueue = await falRequest(endpoint, key, {
+    image_url: sourceImageUrl,
+    model: 'High Fidelity V3',
+    upscale_factor: 4,
+    output_format: 'jpeg',
+    subject_detection: 'Background',
+    face_enhancement: false,
+  });
+  if (!enqueue.ok) {
+    const message = typeof enqueue.data.detail === 'string'
+      ? enqueue.data.detail
+      : `fal production-master request failed (${enqueue.status}).`;
+    throw new Error(message);
+  }
+  const directImages = extractImages(enqueue.data);
+  if (directImages.length > 0) return completeImages(directImages, FAL_MASTER_MODEL);
+  return pendingFromEnqueue(enqueue.data, endpoint, FAL_MASTER_MODEL);
+}
+
+function pendingFromEnqueue(data: JsonObject, endpoint: string, model: string): PendingFalJob {
+  const requestId = (data.request_id as string | undefined) ?? (data.id as string | undefined);
+  if (!requestId) throw new Error('fal response did not include a request id.');
+  return {
+    pending: true,
+    requestId,
+    statusUrl: normalizeQueueUrl(data.status_url as string | undefined, `${endpoint}/requests/${requestId}/status`),
+    responseUrl: normalizeQueueUrl(data.response_url as string | undefined, `${endpoint}/requests/${requestId}`),
+    queuePosition: extractQueuePosition(data),
+    model,
+  };
 }
 
 async function submitIdeogramJob(
@@ -191,9 +283,9 @@ async function submitIdeogramJob(
     throw new Error(message);
   }
 
-  const directImage = extractImageUrl(enqueue.data);
-  if (directImage) {
-    return { pending: false, dataUrl: await fetchToDataUrl(directImage), sourceUrl: directImage, model: FAL_IDEOGRAM_MODEL };
+  const directImages = extractImages(enqueue.data);
+  if (directImages.length > 0) {
+    return completeImages(directImages, FAL_IDEOGRAM_MODEL);
   }
 
   const requestId =
@@ -226,16 +318,16 @@ async function pollFalJob(
     throw new Error("fal generation failed.");
   }
 
-  const statusImage = extractImageUrl(statusData);
-  if (statusImage) {
-    return { pending: false, dataUrl: await fetchToDataUrl(statusImage), sourceUrl: statusImage, model };
+  const statusImages = extractImages(statusData);
+  if (statusImages.length > 0) {
+    return completeImages(statusImages, model);
   }
 
   if (state.includes("complete") || state.includes("succeed") || state === "done") {
     const resultData = await fetchJson(responseUrl, key);
-    const imageUrl = extractImageUrl(resultData);
-    if (!imageUrl) throw new Error("fal generation completed but no image URL was returned.");
-    return { pending: false, dataUrl: await fetchToDataUrl(imageUrl), sourceUrl: imageUrl, model };
+    const images = extractImages(resultData);
+    if (images.length === 0) throw new Error("fal generation completed but no image URL was returned.");
+    return completeImages(images, model);
   }
 
   return {
@@ -299,15 +391,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const falKey = getFalKey();
     const body = (await request.json()) as GenerateBackdropBody;
     const prompt = (body.prompt ?? "").trim();
-    if (!prompt) return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
+    const mode = body.mode ?? 'manual';
+    if (mode !== 'master' && !prompt) return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
     if (prompt.length > 700) {
       return NextResponse.json({ error: "Prompt is too long. Keep it under 700 characters." }, { status: 400 });
     }
 
-    const modelChoice = body.model ?? "flux";
-
     let enqueue: PendingFalJob | CompletedFalJob;
-    if (modelChoice === "ideogram") {
+    if (mode === 'directions') {
+      const count = body.count ?? 3;
+      if (!Number.isInteger(count) || count < 1 || count > 4) {
+        return NextResponse.json({ error: 'Direction count must be between 1 and 4.' }, { status: 400 });
+      }
+      enqueue = await submitDirectionJob(prompt, count, falKey);
+    } else if (mode === 'master') {
+      const sourceImageUrl = (body.sourceImageUrl ?? '').trim();
+      if (!sourceImageUrl.startsWith('https://')) {
+        return NextResponse.json({ error: 'A secure source image URL is required.' }, { status: 400 });
+      }
+      enqueue = await submitMasterJob(sourceImageUrl, falKey);
+    } else if ((body.model ?? 'flux') === "ideogram") {
       enqueue = await submitIdeogramJob(prompt, body.styleType, falKey);
     } else {
       enqueue = await submitFluxJob(prompt, body.styleHint?.trim(), body.aspectMode ?? "portrait", falKey);

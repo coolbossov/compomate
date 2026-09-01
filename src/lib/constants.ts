@@ -38,6 +38,8 @@ export const BACKDROP_DEFAULT_STYLE_HINT =
 
 // --- AI Models ---
 export const FAL_FLUX_MODEL = "fal-ai/flux-pro/v1.1-ultra";
+export const FAL_DIRECTION_MODEL = "fal-ai/flux/schnell";
+export const FAL_MASTER_MODEL = "topaz/upscale/image/precision";
 export const FAL_IDEOGRAM_MODEL = "fal-ai/ideogram/v2";
 export const FAL_BACKDROP_ASPECT = "4:5";
 export const FAL_BACKDROP_WIDTH = 1024;
@@ -303,4 +305,4 @@ export const SHADOW_STANCE_WIDTH_MAX_FRAC = 0.8;
 export const BATCH_LABEL_MAX_CHARS = 64;
 
 // --- Project snapshot version ---
-export const PROJECT_SNAPSHOT_VERSION = 2;
+export const PROJECT_SNAPSHOT_VERSION = 3;

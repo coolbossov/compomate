@@ -5,8 +5,14 @@ export interface BackdropAsset {
   r2Key?: string;          // R2 storage key after upload
   width: number;
   height: number;
-  source: 'upload' | 'ai-flux' | 'ai-ideogram' | 'reference';
+  source: 'upload' | 'ai-flux' | 'ai-ideogram' | 'ai-direction' | 'ai-master' | 'reference';
   prompt?: string;         // AI generation prompt if applicable
+  /** Workflow purpose for guided Background Studio generation. */
+  stage?: 'direction' | 'master';
+  /** Original fal URL, retained so a selected direction can be finished. */
+  providerSourceUrl?: string;
+  /** Whether this asset can be restored from a saved project. */
+  persistenceStatus?: 'pending' | 'ready' | 'error';
   createdAt: number;       // timestamp
 }
 

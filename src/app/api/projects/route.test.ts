@@ -53,6 +53,7 @@ import { checkRateLimit } from "@/lib/server/rate-limit";
 import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
 import { PROJECT_SNAPSHOT_VERSION } from "@/lib/constants";
+import { DEFAULT_BACKGROUND_STUDIO_STATE } from "@/lib/shared/background-studio";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -102,6 +103,9 @@ function validSnapshot() {
     },
     activeBackdrop: null,
     activeSubject: null,
+    backdrops: [],
+    activeBackdropId: null,
+    backgroundStudio: DEFAULT_BACKGROUND_STUDIO_STATE,
   };
 }
 

@@ -4,6 +4,26 @@
 
 ---
 
+## [2026-09-01] Explore Cheaply, Finish Only the Selected Background
+
+**Status:** Accepted
+
+**Decision:** Guided Background Studio work uses a four-stage operator flow: Direction, Explore 3, Refine, and Production master. Each exploration action requests three exact 1024×1280 4:5 options from Flux Schnell. Only the operator-selected direction is sent to Topaz Precision for a faithful 4× finish, producing a 4096×5120 master from the standard direction size. Generated plates exclude people, player names and numbers, words, and invented logos; exact team names and uploaded logos remain editable overlays in CompoMate.
+
+Projects use snapshot version 3 to restore the complete Background Studio workspace, including every direction and master, the selected asset, organization and activity settings, headshot environment, team colors, pose guides, editable overlays, and refinement brief. Generated assets must have a durable R2 key before the workspace can be saved. Versions 1 and 2 remain readable.
+
+Provider result JSON contains URLs and dimensions rather than base64 image payloads. CompoMate streams allowlisted fal.media image responses through a same-origin route, then the browser uploads the bytes directly to R2. This keeps production masters out of Vercel's 4.5MB request/response payload path while retaining the established browser-to-R2 transport.
+
+**Why:** Operators need inexpensive visual exploration before committing to a production finish, and they need saved work to reopen as an editable workspace rather than as a flattened image. Keeping variable text and exact logos out of generated pixels prevents incorrect spellings and preserves later customization.
+
+**Alternatives considered:**
+- Finish every generated option at production resolution — rejected because it adds cost and storage without operator value.
+- Generate one direction at a time — rejected because side-by-side visual choice is central to finding a useful direction.
+- Bake team names, player data, or logos into the generated plate — rejected because generated text and branding are not reliably exact and would make reusable backgrounds less flexible.
+- Store generated images inside the Supabase snapshot — rejected because R2 is the established durable image store and avoids oversized project payloads.
+
+---
+
 ## [2026-09-01] Minimal Canvas Is CompoMate's Single Editor Theme
 
 **Status:** Accepted

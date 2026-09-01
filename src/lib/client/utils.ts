@@ -166,20 +166,48 @@ export async function dataUrlToBackdropAsset(
   name: string,
   dataUrl: string,
   prompt?: string,
+  metadata?: Partial<Pick<BackdropAsset, 'source' | 'stage' | 'providerSourceUrl' | 'persistenceStatus' | 'createdAt' | 'id' | 'width' | 'height'>>,
 ): Promise<BackdropAsset> {
   const blob = dataUrlToBlob(dataUrl);
   const file = new File([blob], name, { type: blob.type || 'image/png' });
   const objectUrl = URL.createObjectURL(file);
   const dims = await loadImageDimensions(objectUrl);
   return {
-    id: makeId(),
+    id: metadata?.id ?? makeId(),
     name,
     objectUrl,
-    width: dims.width,
-    height: dims.height,
-    source: 'ai-flux',
+    width: metadata?.width ?? dims.width,
+    height: metadata?.height ?? dims.height,
+    source: metadata?.source ?? 'ai-flux',
     prompt,
-    createdAt: Date.now(),
+    stage: metadata?.stage,
+    providerSourceUrl: metadata?.providerSourceUrl,
+    persistenceStatus: metadata?.persistenceStatus,
+    createdAt: metadata?.createdAt ?? Date.now(),
+  };
+}
+
+export async function blobToBackdropAsset(
+  name: string,
+  blob: Blob,
+  prompt?: string,
+  metadata?: Partial<Pick<BackdropAsset, 'source' | 'stage' | 'providerSourceUrl' | 'persistenceStatus' | 'createdAt' | 'id' | 'width' | 'height'>>,
+): Promise<BackdropAsset> {
+  const file = new File([blob], name, { type: blob.type || 'image/jpeg' });
+  const objectUrl = URL.createObjectURL(file);
+  const dims = await loadImageDimensions(objectUrl);
+  return {
+    id: metadata?.id ?? makeId(),
+    name,
+    objectUrl,
+    width: metadata?.width ?? dims.width,
+    height: metadata?.height ?? dims.height,
+    source: metadata?.source ?? 'ai-flux',
+    prompt,
+    stage: metadata?.stage,
+    providerSourceUrl: metadata?.providerSourceUrl,
+    persistenceStatus: metadata?.persistenceStatus,
+    createdAt: metadata?.createdAt ?? Date.now(),
   };
 }
 
@@ -215,21 +243,25 @@ export async function r2KeyToBackdropAsset(
   name: string,
   r2Key: string,
   prompt?: string,
+  metadata?: Partial<Pick<BackdropAsset, 'source' | 'stage' | 'providerSourceUrl' | 'createdAt' | 'id' | 'width' | 'height'>>,
 ): Promise<BackdropAsset> {
   const blob = await fetchR2Blob(r2Key);
   const file = new File([blob], name, { type: blob.type || 'image/png' });
   const objectUrl = URL.createObjectURL(file);
   const dims = await loadImageDimensions(objectUrl);
   return {
-    id: makeId(),
+    id: metadata?.id ?? makeId(),
     name,
     objectUrl,
     r2Key,
-    width: dims.width,
-    height: dims.height,
-    source: 'upload',
+    width: metadata?.width ?? dims.width,
+    height: metadata?.height ?? dims.height,
+    source: metadata?.source ?? 'upload',
     prompt,
-    createdAt: Date.now(),
+    stage: metadata?.stage,
+    providerSourceUrl: metadata?.providerSourceUrl,
+    persistenceStatus: 'ready',
+    createdAt: metadata?.createdAt ?? Date.now(),
   };
 }
 

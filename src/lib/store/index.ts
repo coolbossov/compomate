@@ -17,6 +17,7 @@ import type { TemporalState } from 'zundo';
 import type { AppState, UndoableState } from './types';
 import { createFilesSlice } from './slices/filesSlice';
 import { createBackdropSlice } from './slices/backdropSlice';
+import { createBackgroundStudioSlice } from './slices/backgroundStudioSlice';
 import { createCompositionSlice } from './slices/compositionSlice';
 import { createNamesSlice } from './slices/namesSlice';
 import { createExportSlice } from './slices/exportSlice';
@@ -37,6 +38,7 @@ const storeCreator: StateCreator<
 > = (set, get, api) => ({
   ...createFilesSlice(set, get, api),
   ...createBackdropSlice(set, get, api),
+  ...createBackgroundStudioSlice(set, get, api),
   ...createCompositionSlice(set, get, api),
   ...createNamesSlice(set, get, api),
   ...createExportSlice(set, get, api),
@@ -76,6 +78,7 @@ const persistPartialize = (state: AppState) => ({
   nameYFromBottomPct: state.nameYFromBottomPct,
   leftTab: state.leftTab,
   showSafeArea: state.showSafeArea ?? true,
+  backgroundStudio: state.backgroundStudio,
 });
 
 // ---------------------------------------------------------------------------

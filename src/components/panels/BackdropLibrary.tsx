@@ -15,6 +15,7 @@ interface BackdropLibraryProps {
   onAdd: (files: File[]) => Promise<void>;
   onRemove: (id: string) => void;
   onSetActive: (id: string | null) => void;
+  onRetrySave?: (id: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ export function BackdropLibrary({
   onAdd,
   onRemove,
   onSetActive,
+  onRetrySave,
 }: BackdropLibraryProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -124,25 +126,40 @@ export function BackdropLibrary({
           {backdrops.map((backdrop) => (
             <div
               key={backdrop.id}
-              className={`group relative rounded-lg overflow-hidden border-2 cursor-pointer transition-colors ${
+              className={`group relative rounded-lg overflow-hidden border-2 transition-colors ${
                 backdrop.id === activeBackdropId
                   ? 'border-[var(--brand-secondary)] ring-2 ring-[var(--brand-primary)]'
                   : 'border-[color:var(--panel-border)] hover:border-[var(--brand-secondary)]'
               }`}
-              onClick={() => {
-                // Click active backdrop again to deselect it
-                if (backdrop.id === activeBackdropId) {
-                  onSetActive(null);
-                } else {
-                  onSetActive(backdrop.id);
-                }
-              }}
             >
-              <img
-                className="aspect-[4/5] w-full object-cover"
-                src={backdrop.objectUrl}
-                alt={backdrop.name}
-              />
+              <button
+                type="button"
+                className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand-secondary)]"
+                onClick={() => onSetActive(backdrop.id)}
+                aria-pressed={backdrop.id === activeBackdropId}
+                aria-label={`Select ${backdrop.name}${backdrop.stage ? `, ${backdrop.stage}` : ''}`}
+              >
+                <img
+                  className="aspect-[4/5] w-full object-cover"
+                  src={backdrop.objectUrl}
+                  alt=""
+                />
+                <span className="block truncate bg-black/70 px-1 pb-1 pt-0.5 text-[10px] text-white">
+                  {backdrop.stage === 'master' ? 'Production master' : backdrop.stage === 'direction' ? 'Direction option' : backdrop.name}
+                </span>
+                <span className="block bg-black/70 px-1 pb-1 text-[9px] text-white/75">
+                  {backdrop.width}×{backdrop.height}{backdrop.persistenceStatus === 'pending' ? ' · saving…' : backdrop.persistenceStatus === 'error' ? ' · save failed' : ''}
+                </span>
+              </button>
+              {backdrop.persistenceStatus === 'error' && onRetrySave ? (
+                <button
+                  type="button"
+                  className="absolute bottom-10 left-1 rounded bg-white/95 px-1.5 py-1 text-[9px] font-semibold text-[var(--text-primary)] shadow"
+                  onClick={() => { void onRetrySave(backdrop.id); }}
+                >
+                  Retry save
+                </button>
+              ) : null}
               {/* Hover delete button */}
               <button
                 className="absolute top-1 right-1 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-black/70 text-white text-xs hover:bg-red-500/90 transition-colors"
@@ -152,9 +169,6 @@ export function BackdropLibrary({
               >
                 ✕
               </button>
-              <p className="truncate bg-black/55 px-1 pb-1 pt-0.5 text-[10px] text-white">
-                {backdrop.name}
-              </p>
             </div>
           ))}
         </div>

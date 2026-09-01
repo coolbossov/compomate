@@ -47,7 +47,9 @@ npm run test:e2e:ui
 npm run test:e2e:debug
 ```
 
-The editor-shell smoke suite also verifies the Minimal Canvas shell and official pink active state, the top-level `Composite` / `Background Studio` workspace switch, collapsed Background Studio inspector defaults, library-rail collapse behavior, and the 1-versus-3 subject-guide change. It intentionally does not submit paid backdrop-generation requests.
+The editor-shell suite verifies the Minimal Canvas shell and official pink active state, the top-level `Composite` / `Background Studio` workspace switch, collapsed Background Studio inspector defaults, library-rail collapse behavior, and the 1-versus-3 subject-guide change. It also intercepts provider, R2, and project routes to prove the full guided path—three directions, select one, finish one 4096×5120 master, save, reload, open, and restore—without submitting paid generation requests or writing remote data.
+
+Provider-contract tests also prove that completed generation responses contain lightweight image references rather than base64 payloads, and that `/api/generate-backdrop/image` streams only allowlisted `fal.media` image responses while rejecting arbitrary hosts and non-image content.
 
 ## Deploy and post-deploy
 

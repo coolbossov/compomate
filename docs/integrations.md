@@ -1,6 +1,6 @@
 # CompoMate — Integrations
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-09-01
 
 ---
 
@@ -40,16 +40,22 @@
 
 ---
 
-## fal.ai (Flux Schnell)
+## fal.ai (Flux and Topaz)
 
-**Purpose:** AI backdrop generation. Users enter a prompt + style + aspect ratio and receive a generated studio backdrop PNG.
+**Purpose:** AI backdrop exploration and production finishing.
+
+- Guided Background Studio exploration uses `fal-ai/flux/schnell` to return three 1024×1280 (4:5) direction options in one bounded request.
+- Manual AI Generate retains Flux Pro Ultra and Ideogram v2 choices.
+- `topaz/upscale/image/precision` finishes only the selected direction at 4×. A standard guided direction therefore becomes a 4096×5120 production master without inventing a second design.
+- Provider completion responses carry lightweight image references only. The browser retrieves full-resolution bytes through a same-origin allowlisted streaming route before uploading them directly to R2, avoiding Vercel's 4.5MB function payload ceiling without reducing image quality.
+- Generated plates explicitly exclude people, player names/numbers, words, and invented logos. Exact team names and uploaded logos remain editable application overlays.
 
 **Env vars:**
 - `FAL_KEY` — fal.ai API key
 
 **Auth method:** Bearer token (`FAL_KEY`) in Authorization header.
 
-**Failure behavior:** Generation fails → user sees error toast. Compositing continues with uploaded backdrops.
+**Failure behavior:** Generation fails → user sees an error toast and existing assets remain usable. Every generated option is uploaded to R2 before a project can be saved; an individual storage failure is labeled on the thumbnail and exposes `Retry save`.
 
 **Dashboard:** https://fal.ai/dashboard
 

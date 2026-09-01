@@ -94,11 +94,20 @@ User loads CSV (first name, last name per row)
 
 ### AI Backdrop Generation
 ```
-User enters prompt + style + aspect ratio
-  → POST /api/generate (fal.ai Flux Schnell)
-  → result image uploaded to R2
-  → backdrop added to FilePanel
+Operator sets direction, activity/environment, style, composition, and optional custom guidance
+  → POST /api/generate-backdrop { mode: directions, count: 3 }
+    → fal.ai Flux Schnell returns three 1024×1280 source URLs + dimensions
+  → browser GET /api/generate-backdrop/image?url=<allowlisted fal.media URL>
+    → response body is streamed, not embedded as base64 JSON
+  → browser PUT direct to R2
+  → three durable direction assets appear in the shared library
+  → operator selects one direction
+  → POST /api/generate-backdrop { mode: master, sourceImageUrl }
+    → Topaz Precision returns one 4× source URL
+  → same streaming + direct-to-R2 path stores the 4096×5120 production master
 ```
+
+The provider-response API deliberately carries references rather than image bytes. Full-resolution results can exceed Vercel's 4.5MB function payload ceiling, so the image route validates `fal.media`, streams the upstream body without buffering it into JSON, and returns only an image content type with no-store/nosniff headers. The browser owns the subsequent R2 upload and exposes a retry state if durable storage fails.
 
 ### Session Persistence (opt-in)
 ```
@@ -117,6 +126,7 @@ COMPOMATE_ALLOW_UNAUTHENTICATED_PROJECT_PERSISTENCE=true
 | `names` | firstName, lastName, nameStyle, stickyLastName | No |
 | `export` | profile, loading, batch[], batchRunning, exportLocked | No |
 | `backdrop` | prompt, style, aspectRatio, generationLoading | No |
+| `backgroundStudio` | organization, colors, activity/environment, style, pose guides, editable team overlays, custom direction, refinement | No |
 | `ui` | status, canvasSize, showSafeArea, showDangerZone, projectName | No |
 
 zundo middleware wraps only the `composition` slice — undo/redo applies to visual adjustments only, not file uploads or UI state.
@@ -149,7 +159,8 @@ src/
     api/
       export/route.ts                 # Sharp compositing pipeline (731 lines)
       upload/route.ts                 # Presigned PUT URL generator
-      generate/route.ts               # fal.ai Flux backdrop generation
+      generate-backdrop/route.ts      # fal.ai direction/master orchestration
+      generate-backdrop/image/route.ts # allowlisted streaming image transport
       projects/route.ts               # Session persistence (opt-in)
       diagnostics/route.ts            # Health check endpoint
   lib/
@@ -178,4 +189,4 @@ The root editor shell has two top-level workspaces that share one Zustand asset 
 - **Composite** is the production compositor for subjects, active backdrops, effects, names, and export.
 - **Background Studio** is a direction-setting workspace for choosing a team/activity, visual style, planned subject count, and team-level overlays before selecting or generating a backdrop.
 
-Background Studio embeds the existing `BackdropPanel` rather than creating a second generation or storage path. Uploads, the in-session library, fal.ai generation, R2 ownership, and Supabase project snapshots therefore continue to use the existing implementation. The first workspace release intentionally keeps organization profiles as explicitly labeled starter/local-session data. Database-backed organization records, reuse history, production-master upscaling, DAM publishing, and Google Drive publishing require separate integration contracts.
+Background Studio embeds the existing `BackdropPanel` rather than creating a second generation or storage path. Uploads, the in-session library, fal.ai generation, R2 ownership, and Supabase project snapshots therefore continue to use the existing implementation. Snapshot version 3 restores every direction/master and the Background Studio state while retaining legacy v1/v2 reads. The first production workflow keeps organization profiles as explicitly labeled starter/local-session data. Database-backed organization records, reuse-history enforcement, DAM publishing, and Google Drive publishing require separate integration contracts.
