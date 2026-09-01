@@ -1,6 +1,6 @@
 # CompoMate — Architecture
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-09-01
 
 ## Stack
 
@@ -171,3 +171,11 @@ supabase/
 public/
   fonts/                              # TTF fonts embedded at build time (not CDN)
 ```
+## Editor Workspaces
+
+The root editor shell has two top-level workspaces that share one Zustand asset state:
+
+- **Composite** is the production compositor for subjects, active backdrops, effects, names, and export.
+- **Background Studio** is a direction-setting workspace for choosing a team/activity, visual style, planned subject count, and team-level overlays before selecting or generating a backdrop.
+
+Background Studio embeds the existing `BackdropPanel` rather than creating a second generation or storage path. Uploads, the in-session library, fal.ai generation, R2 ownership, and Supabase project snapshots therefore continue to use the existing implementation. The first workspace release intentionally keeps organization profiles as explicitly labeled starter/local-session data. Database-backed organization records, reuse history, production-master upscaling, DAM publishing, and Google Drive publishing require separate integration contracts.

@@ -1,8 +1,14 @@
 # Deployment
 
-> Last Updated: 2026-05-24
+> Last Updated: 2026-09-01
 
 This is the short release checklist. Keep repo-specific branch policy and production rules in the infrastructure policy as the source of truth.
+
+## Production-Only Git Deployments
+
+CompoMate intentionally deploys only from `main`. The repository-level `vercel.json` allows the `main` branch and uses the `**` minimatch pattern to disable Git-triggered deployments for every other branch, including slash-containing branches such as `codex/feature-name`. Pull requests still run GitHub Actions, but they must not create Vercel preview or staging deployments.
+
+Merging an approved pull request into `main` triggers the production deployment for the linked `sapd/compomate` Vercel project. Do not use an unqualified `vercel` command, because that creates a Preview deployment by default; any manual provider release must explicitly target production and prove the linked project identity first.
 
 ## Normal Release Path
 

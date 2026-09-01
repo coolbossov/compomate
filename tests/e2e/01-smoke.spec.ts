@@ -37,6 +37,21 @@ test.describe('Main app shell', () => {
     const interactive = page.locator('button, [role="button"]').first();
     await expect(interactive).toBeVisible({ timeout: 10_000 });
   });
+
+  test('Background Studio switches workspaces and updates pose guides', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Background Studio' }).click();
+    await expect(page.getByTestId('background-studio-workspace')).toBeVisible();
+    await expect(page.getByText('Live composition preview')).toBeVisible();
+    await expect(page.getByTestId('subject-guide')).toHaveCount(1);
+
+    await page.getByRole('button', { name: '3 poses' }).click();
+    await expect(page.getByTestId('subject-guide')).toHaveCount(3);
+
+    await page.getByRole('button', { name: 'Composite', exact: true }).click();
+    await expect(page.getByTestId('composite-workspace')).toBeVisible();
+  });
 });
 
 test.describe('API: export requires valid payload', () => {

@@ -47,9 +47,12 @@ npm run test:e2e:ui
 npm run test:e2e:debug
 ```
 
+The editor-shell smoke suite also verifies that the top-level `Composite` / `Background Studio` workspace switch works and that selecting 1 versus 3 planned subject poses updates the live guide count. It intentionally does not submit paid backdrop-generation requests.
+
 ## Deploy and post-deploy
 
 - Production deploys are Vercel-driven.
+- Vercel Git deployments are production-only: `main` is enabled and all non-main branches, including slash-containing branches, are disabled by the `**` rule in `vercel.json`. Pull-request checks run in GitHub Actions without a Vercel preview/staging deployment.
 - After a production deploy, confirm the diagnostics endpoint responds:
 
 ```bash
