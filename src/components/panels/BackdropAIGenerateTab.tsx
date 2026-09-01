@@ -23,7 +23,7 @@ type IdeogramStyleValue = (typeof IDEOGRAM_STYLES)[number]['value'];
 // ---------------------------------------------------------------------------
 
 interface BackdropAIGenerateTabProps {
-  onGenerate: (body: Record<string, unknown>, filenamePrefix: string, setGenerating: (v: boolean) => void) => Promise<void>;
+  onGenerate: (body: Record<string, unknown>, filenamePrefix: string, setGenerating: (v: boolean) => void) => Promise<unknown>;
   generation: BackdropGenerationState;
   isAnyGenerating: boolean;
 }

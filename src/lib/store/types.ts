@@ -6,6 +6,7 @@ import type { BackdropAsset, BackdropGenerationState } from '@/types/backdrop';
 import type { CompositionState, ExportProfileId, NameStyleId } from '@/lib/shared/composition';
 import type { BatchItem } from '@/types/export';
 import type { FontPairId } from '@/types/composition';
+import type { BackgroundStudioState } from '@/lib/shared/background-studio';
 
 export interface ToastMessage {
   id: number;
@@ -54,6 +55,12 @@ export interface BackdropSlice {
   setActiveBackdrop: (id: string | null) => void;
   setGeneration: (state: Partial<BackdropGenerationState>) => void;
   resetGeneration: () => void;
+}
+
+export interface BackgroundStudioSlice {
+  backgroundStudio: BackgroundStudioState;
+  updateBackgroundStudio: (patch: Partial<BackgroundStudioState>) => void;
+  replaceBackgroundStudio: (state: BackgroundStudioState) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +149,7 @@ export interface UISlice {
 
 export type AppState = FilesSlice &
   BackdropSlice &
+  BackgroundStudioSlice &
   CompositionSlice &
   NamesSlice &
   ExportSlice &

@@ -86,6 +86,113 @@ test.describe('Main app shell', () => {
     }));
     expect(widths.scroll).toBe(widths.client);
   });
+
+  test('guided background workflow generates 3 directions, finishes 1 master, and restores the saved workspace', async ({ page }) => {
+    const onePixelPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const appOrigin = process.env.BASE_URL ?? 'http://localhost:3000';
+    let savedSnapshot: unknown = null;
+    let generationCount = 0;
+    let presignCount = 0;
+    let uploadCount = 0;
+
+    await page.route('**/api/generate-backdrop*', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 400, json: { error: 'Unexpected poll in mocked test.' } });
+        return;
+      }
+      const body = route.request().postDataJSON() as { mode?: string };
+      generationCount += 1;
+      const isMaster = body.mode === 'master';
+      const count = isMaster ? 1 : 3;
+      await route.fulfill({
+        status: 200,
+        json: {
+          pending: false,
+          model: isMaster ? 'topaz/upscale/image/precision' : 'fal-ai/flux/schnell',
+          sourceUrl: `https://fal.test/${generationCount}-1.jpg`,
+          images: Array.from({ length: count }, (_, index) => ({
+            sourceUrl: `https://fal.test/${generationCount}-${index + 1}.jpg`,
+            width: isMaster ? 4096 : 1024,
+            height: isMaster ? 5120 : 1280,
+          })),
+        },
+      });
+    });
+    await page.route('**/api/generate-backdrop/image*', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(onePixelPng.split(',')[1]!, 'base64') });
+    });
+    await page.route('**/api/r2/presign', async (route) => {
+      presignCount += 1;
+      const body = route.request().postDataJSON() as { filename: string };
+      await route.fulfill({
+        status: 200,
+        json: {
+          uploadUrl: `${appOrigin}/mock-r2/${encodeURIComponent(body.filename)}`,
+          key: `backdrops/${body.filename}`,
+          downloadUrl: `${appOrigin}/mock-r2-download/${encodeURIComponent(body.filename)}`,
+        },
+      });
+    });
+    await page.route('**/mock-r2/**', async (route) => {
+      uploadCount += 1;
+      await route.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' });
+    });
+    await page.route('**/mock-r2-download/**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(onePixelPng.split(',')[1]!, 'base64') });
+    });
+    await page.route('**/api/r2/download*', async (route) => {
+      const key = new URL(route.request().url()).searchParams.get('key') ?? 'asset';
+      await route.fulfill({ status: 200, json: { downloadUrl: `${appOrigin}/mock-r2-download/${encodeURIComponent(key)}` } });
+    });
+    await page.route('**/api/projects**', async (route) => {
+      const url = new URL(route.request().url());
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as { snapshot: unknown };
+        savedSnapshot = body.snapshot;
+        await route.fulfill({ status: 201, json: { project: { id: 'qa-project', name: 'QA guided workflow', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } } });
+        return;
+      }
+      if (url.pathname.endsWith('/qa-project')) {
+        await route.fulfill({ status: 200, json: { project: { id: 'qa-project', name: 'QA guided workflow', payload: savedSnapshot } } });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          configured: true,
+          projects: savedSnapshot ? [{ id: 'qa-project', name: 'QA guided workflow', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }] : [],
+        },
+      });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Background Studio' }).click();
+    await page.getByRole('button', { name: 'Generate 3 directions', exact: true }).click();
+    await expect(page.getByText('Direction option', { exact: true })).toHaveCount(3);
+    await expect(page.getByText(/^1024×1280/)).toHaveCount(3);
+
+    const directionButtons = page.getByRole('button', { name: /Select direction_/i });
+    await directionButtons.nth(1).click();
+    await page.getByRole('button', { name: 'Finish production master', exact: true }).click();
+    await expect(page.getByText('Production master', { exact: true })).toHaveCount(1);
+    await expect(page.getByText(/^4096×5120/)).toBeVisible();
+    await expect.poll(() => presignCount).toBe(4);
+    await expect.poll(() => uploadCount).toBe(4);
+
+    const projectName = page.getByPlaceholder('Project name');
+    await projectName.fill('QA guided workflow');
+    await page.getByRole('button', { name: 'Save project', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'QA guided workflow', exact: true })).toBeVisible();
+    expect(savedSnapshot).not.toBeNull();
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Background Studio' }).click();
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'QA guided workflow', exact: true }).click();
+    await expect(page.getByText('Direction option', { exact: true })).toHaveCount(3);
+    await expect(page.getByText('Production master', { exact: true })).toHaveCount(1);
+    await expect(page.getByText(/^4096×5120/)).toBeVisible();
+  });
 });
 
 test.describe('API: export requires valid payload', () => {

@@ -1,6 +1,6 @@
 # CompoMate — Database
 
-**Last Updated:** 2026-04-24
+**Last Updated:** 2026-09-01
 
 **Supabase Project:** `qnfafwqjjbgiaygrdcoc` (name `Portal-Route`, org `MyStartup.me`, region `us-east-2`, free tier). Co-tenants with Portal + HELM — all three apps share this one 500MB project.
 
@@ -15,6 +15,19 @@ Migration approach: SQL files in `supabase/migrations/`, applied via Supabase CL
 ---
 
 ## Key Tables
+
+### `compomate_projects`
+Session-scoped saved workspaces. The `payload` JSON uses project snapshot version 3 for new saves while the application continues to read versions 1 and 2.
+
+Version 3 restores the complete Background Studio workspace: all R2-backed backdrop directions and masters, the selected backdrop ID, activity and headshot environment, organization and team colors, pose-guide count, exact logo data overlay, team-name visibility, style, custom direction, refinement brief, plus the existing compositor settings and active subject. Generated images themselves remain in R2; Supabase stores only keys and metadata. New saves are blocked while a generated asset lacks a durable R2 key.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | uuid PK | Internal project ID |
+| `session_id` | text | Session-cookie owner used for list/open isolation |
+| `name` | text | Human-readable project name |
+| `payload` | jsonb | Versioned restorable workspace snapshot |
+| `created_at` / `updated_at` | timestamptz | Saved-project ordering and display |
 
 ### `compomate_sessions`
 Saved composition states. Identified by `session_token` (browser-side identifier).
@@ -61,7 +74,7 @@ Metadata for backdrop images stored in R2. One row per uploaded/generated backdr
 | `name` | text | Display name |
 | `r2_key` | text | R2 object key for fetching the file |
 | `width` / `height` | integer | Image dimensions in pixels |
-| `source` | text | `upload` / `ai-flux` / `ai-ideogram` / `reference` |
+| `source` | text | `upload` / `ai-flux` / `ai-ideogram` / `ai-direction` / `ai-master` / `reference` |
 | `prompt` | text NULLABLE | AI prompt used to generate (if applicable) |
 | `user_id` | uuid NULLABLE | Phase 3: user ownership |
 

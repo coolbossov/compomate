@@ -10,16 +10,19 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { BackdropPanel } from '@/components/panels/BackdropPanel';
+import { BackdropPanel, type BackdropPanelHandle } from '@/components/panels/BackdropPanel';
 import { useActiveBackdrop, useBackdrops } from '@/lib/store/selectors';
 import { useStore } from '@/lib/store';
-
-const ACTIVITIES = [
-  'Dance', 'Gymnastics', 'Cheer', 'Martial Arts', 'Basketball', 'Volleyball',
-  'Soccer', 'Football', 'Baseball', 'Softball', 'Golf', 'Hockey', 'Swimming',
-  'Wrestling', 'Lacrosse', 'Tennis', 'Track & Field', 'Cross Country', 'School',
-  'Daycare', 'Family', 'Senior Portraits', 'Pro Bono',
-] as const;
+import {
+  BACKGROUND_ACTIVITIES,
+  buildBackgroundDirectionPrompt,
+  DEFAULT_BACKGROUND_STUDIO_STATE,
+  type BackgroundActivity,
+  type BackgroundStudioState,
+  type BackgroundStyleId,
+  type HeadshotEnvironment,
+} from '@/lib/shared/background-studio';
+import { fileToDataUrl } from '@/lib/client/utils';
 
 const STYLES = [
   { id: 'arena', label: 'Cinematic Arena', swatch: 'from-emerald-950 via-zinc-950 to-emerald-700' },
@@ -82,23 +85,23 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
   const backdrops = useBackdrops();
   const showToast = useStore((state) => state.showToast);
   const libraryRef = useRef<HTMLElement>(null);
+  const backdropPanelRef = useRef<BackdropPanelHandle>(null);
   const [libraryOpen, setLibraryOpen] = useState(true);
-  const [organizationName, setOrganizationName] = useState('St. James Mustangs');
-  const [newOrganizationConfirmed, setNewOrganizationConfirmed] = useState(false);
-  const [activity, setActivity] = useState<(typeof ACTIVITIES)[number]>('Volleyball');
-  const [style, setStyle] = useState('arena');
-  const [poseCount, setPoseCount] = useState<1 | 2 | 3>(1);
-  const [includeTeamName, setIncludeTeamName] = useState(true);
-  const [includeLogo, setIncludeLogo] = useState(false);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [useCustomDirection, setUseCustomDirection] = useState(false);
-  const [customDirection, setCustomDirection] = useState('');
+  const studio = useStore((state) => state.backgroundStudio ?? DEFAULT_BACKGROUND_STUDIO_STATE);
+  const updateBackgroundStudio = useStore((state) => state.updateBackgroundStudio);
+  const [isGeneratingDirections, setIsGeneratingDirections] = useState(false);
+  const [isFinishingMaster, setIsFinishingMaster] = useState(false);
+  const { organizationName, activity, style, poseCount, includeTeamName, includeLogo, logoDataUrl, useCustomDirection, customDirection } = studio;
+
+  function updateStudio(patch: Partial<BackgroundStudioState>) {
+    updateBackgroundStudio(patch);
+  }
 
   const savedOrganization = useMemo(
     () => SAVED_ORGANIZATIONS.find((org) => org.name.toLowerCase() === organizationName.trim().toLowerCase()),
     [organizationName],
   );
-  const isUnconfirmedNewOrganization = organizationName.trim().length > 0 && !savedOrganization && !newOrganizationConfirmed;
+  const isUnconfirmedNewOrganization = organizationName.trim().length > 0 && !savedOrganization && !studio.organizationConfirmed;
 
   function openLibrary(message: string) {
     setLibraryOpen(true);
@@ -106,11 +109,33 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
     showToast(message);
   }
 
-  function handleLogoUpload(file: File | undefined) {
+  async function handleLogoUpload(file: File | undefined) {
     if (!file) return;
-    if (logoPreview) URL.revokeObjectURL(logoPreview);
-    setLogoPreview(URL.createObjectURL(file));
-    setIncludeLogo(true);
+    const dataUrl = await fileToDataUrl(file);
+    updateStudio({ logoDataUrl: dataUrl, includeLogo: true });
+  }
+
+  async function generateDirections() {
+    if (isUnconfirmedNewOrganization) {
+      showToast('Confirm the new organization before generating directions.');
+      return;
+    }
+    setLibraryOpen(true);
+    setIsGeneratingDirections(true);
+    try {
+      await backdropPanelRef.current?.generateDirections(buildBackgroundDirectionPrompt(studio));
+    } finally {
+      setIsGeneratingDirections(false);
+    }
+  }
+
+  async function finishProductionMaster() {
+    setIsFinishingMaster(true);
+    try {
+      await backdropPanelRef.current?.finishProductionMaster();
+    } finally {
+      setIsFinishingMaster(false);
+    }
   }
 
   const desktopColumns = libraryOpen
@@ -142,7 +167,9 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
           </button>
         </div>
         <div className={libraryOpen ? 'block' : 'xl:hidden'}>
-          <BackdropPanel />
+          <BackdropPanel
+            ref={backdropPanelRef}
+          />
         </div>
         {!libraryOpen && (
           <div className="hidden space-y-2 p-2 xl:block" aria-label="Collapsed background thumbnails">
@@ -188,9 +215,9 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
             )}
             {includeLogo && (
               <div className="absolute right-[6%] top-[16%] flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/70 bg-emerald-900/85 text-xl font-black text-white shadow-lg">
-                {logoPreview ? (
+                {logoDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoPreview} alt="Uploaded team logo" className="h-full w-full object-contain" />
+                  <img src={logoDataUrl} alt="Uploaded team logo" className="h-full w-full object-contain" />
                 ) : 'M'}
               </div>
             )}
@@ -198,12 +225,21 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
           </div>
         </div>
 
-        <div className="mx-auto grid w-full max-w-[620px] grid-cols-1 gap-2 sm:grid-cols-3" data-testid="preview-actions">
+        <div className="mx-auto mb-2 grid w-full max-w-[620px] grid-cols-2 gap-1 rounded-md border border-[color:var(--panel-border)] bg-white p-1 text-[10px] text-[var(--text-soft)] sm:grid-cols-4" aria-label="Background production workflow">
+          <span className="rounded bg-[#fff7fe] px-2 py-1.5"><strong className="text-[var(--text-primary)]">1 Direction</strong><br />Set the brief</span>
+          <span className="rounded px-2 py-1.5"><strong className="text-[var(--text-primary)]">2 Explore</strong><br />Compare 3 options</span>
+          <span className="rounded px-2 py-1.5"><strong className="text-[var(--text-primary)]">3 Refine</strong><br />Select and adjust</span>
+          <span className="rounded px-2 py-1.5"><strong className="text-[var(--text-primary)]">4 Master</strong><br />Finish one file</span>
+        </div>
+        <div className="mx-auto grid w-full max-w-[620px] grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" data-testid="preview-actions">
           <button type="button" className="btn-secondary flex items-center justify-center gap-2" onClick={() => openLibrary('Review the existing library before generating a new direction.')}>
             <Search className="h-4 w-4" /> Search existing
           </button>
-          <button type="button" className="btn-primary flex items-center justify-center gap-2" onClick={() => openLibrary('Choose AI Generate, confirm the prompt and model, then generate directions.')}>
-            <Sparkles className="h-4 w-4" /> Generate directions
+          <button type="button" className="btn-primary flex items-center justify-center gap-2" onClick={() => { void generateDirections(); }} disabled={isGeneratingDirections || isFinishingMaster}>
+            <Sparkles className="h-4 w-4" /> {isGeneratingDirections ? 'Generating 3…' : 'Generate 3 directions'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => { void finishProductionMaster(); }} disabled={!activeBackdrop || isGeneratingDirections || isFinishingMaster || activeBackdrop.stage === 'master'}>
+            {isFinishingMaster ? 'Finishing master…' : activeBackdrop?.stage === 'master' ? 'Master selected' : 'Finish production master'}
           </button>
           <button type="button" className="btn-secondary" onClick={onUseInComposite} disabled={!activeBackdrop}>
             Use in Composite
@@ -224,7 +260,15 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
             className="input mt-1"
             list="saved-organizations"
             value={organizationName}
-            onChange={(event) => { setOrganizationName(event.target.value); setNewOrganizationConfirmed(false); }}
+            onChange={(event) => {
+              const name = event.target.value;
+              const match = SAVED_ORGANIZATIONS.find((org) => org.name.toLowerCase() === name.trim().toLowerCase());
+              updateStudio({
+                organizationName: name,
+                organizationConfirmed: Boolean(match),
+                teamColors: match?.colors ?? studio.teamColors,
+              });
+            }}
             placeholder="Start typing a team name"
           />
           <datalist id="saved-organizations">
@@ -243,14 +287,24 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
               </div>
             </div>
           ) : isUnconfirmedNewOrganization ? (
-            <button type="button" className="btn-secondary mt-2 w-full" onClick={() => setNewOrganizationConfirmed(true)}>Confirm new organization</button>
+            <button type="button" className="btn-secondary mt-2 w-full" onClick={() => updateStudio({ organizationConfirmed: true })}>Confirm new organization</button>
           ) : organizationName.trim() ? (
             <p className="mt-2 text-xs text-[var(--brand-soft)]">New organization confirmed for this local session.</p>
           ) : null}
           <label className="mt-3 block text-xs text-[var(--text-soft)]" htmlFor="activity">Activity type</label>
-          <select id="activity" className="input mt-1" value={activity} onChange={(event) => setActivity(event.target.value as (typeof ACTIVITIES)[number])}>
-            {ACTIVITIES.map((item) => <option key={item}>{item}</option>)}
+          <select id="activity" className="input mt-1" value={activity} onChange={(event) => updateStudio({ activity: event.target.value as BackgroundActivity })}>
+            {BACKGROUND_ACTIVITIES.map((item) => <option key={item}>{item}</option>)}
           </select>
+          {activity === 'Headshots' && (
+            <>
+              <label className="mt-3 block text-xs text-[var(--text-soft)]" htmlFor="headshot-environment">Headshot environment</label>
+              <select id="headshot-environment" className="input mt-1" value={studio.headshotEnvironment} onChange={(event) => updateStudio({ headshotEnvironment: event.target.value as HeadshotEnvironment })}>
+                <option value="office">Office</option>
+                <option value="outside">Outside</option>
+                <option value="conference-room">Conference room</option>
+              </select>
+            </>
+          )}
         </ControlSection>
 
         <ControlSection title="Style" summary={STYLES.find((item) => item.id === style)?.label ?? 'Choose a direction'}>
@@ -260,7 +314,7 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
                 key={item.id}
                 type="button"
                 className={`overflow-hidden rounded-md border text-left ${style === item.id ? 'border-[var(--brand-secondary)] ring-2 ring-[var(--brand-primary)]' : 'border-[color:var(--panel-border)]'}`}
-                onClick={() => setStyle(item.id)}
+                onClick={() => updateStudio({ style: item.id as BackgroundStyleId })}
                 aria-pressed={style === item.id}
               >
                 <span className={`block h-16 bg-gradient-to-br ${item.swatch}`} />
@@ -274,7 +328,7 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
           <p className="mb-2 text-xs text-[var(--text-soft)]">Plan clear space for the final photographed subjects.</p>
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="Subject pose guides">
             {([1, 2, 3] as const).map((count) => (
-              <button key={count} type="button" className={poseCount === count ? 'btn-primary' : 'btn-secondary'} onClick={() => setPoseCount(count)} aria-pressed={poseCount === count}>
+              <button key={count} type="button" className={poseCount === count ? 'btn-primary' : 'btn-secondary'} onClick={() => updateStudio({ poseCount: count })} aria-pressed={poseCount === count}>
                 {count} {count === 1 ? 'pose' : 'poses'}
               </button>
             ))}
@@ -282,18 +336,21 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
         </ControlSection>
 
         <ControlSection title="Text and logo" summary="Team-level overlays only">
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeTeamName} onChange={(event) => setIncludeTeamName(event.target.checked)} /> Include team name</label>
-          <label className="mt-3 flex items-center gap-2 text-xs"><input type="checkbox" checked={includeLogo} onChange={(event) => setIncludeLogo(event.target.checked)} /> Include team logo</label>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={includeTeamName} onChange={(event) => updateStudio({ includeTeamName: event.target.checked })} /> Include team name</label>
+          <label className="mt-3 flex items-center gap-2 text-xs"><input type="checkbox" checked={includeLogo} onChange={(event) => updateStudio({ includeLogo: event.target.checked })} /> Include team logo</label>
           <label className="btn-secondary mt-3 flex cursor-pointer items-center justify-center gap-2">
             <Upload className="h-3.5 w-3.5" /> Upload exact logo
-            <input className="sr-only" type="file" accept="image/*" onChange={(event) => handleLogoUpload(event.target.files?.[0])} />
+            <input className="sr-only" type="file" accept="image/*" onChange={(event) => { void handleLogoUpload(event.target.files?.[0]); }} />
           </label>
-          <p className="mt-2 text-[10px] leading-4 text-[var(--text-soft)]">Player names and numbers are added later in the production workflow.</p>
+          <p className="mt-2 text-[10px] leading-4 text-[var(--text-soft)]">These stay editable in the preview. Player names and numbers are added later; none are baked into generated plates.</p>
         </ControlSection>
 
         <ControlSection title="Custom direction" summary={useCustomDirection ? 'Included in the generation brief' : 'Optional'}>
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={useCustomDirection} onChange={(event) => setUseCustomDirection(event.target.checked)} /> Add custom text</label>
-          {useCustomDirection && <textarea className="input mt-3 min-h-24 resize-y" value={customDirection} onChange={(event) => setCustomDirection(event.target.value)} placeholder="Describe a specific mood, texture, prop, or visual idea…" />}
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={useCustomDirection} onChange={(event) => updateStudio({ useCustomDirection: event.target.checked })} /> Add custom direction</label>
+          {useCustomDirection && <textarea className="input mt-3 min-h-24 resize-y" value={customDirection} onChange={(event) => updateStudio({ customDirection: event.target.value })} placeholder="Describe a specific mood, texture, prop, or visual idea…" />}
+          <label className="mt-3 block text-xs text-[var(--text-soft)]" htmlFor="direction-refinement">Refine the selected direction</label>
+          <textarea id="direction-refinement" className="input mt-1 min-h-20 resize-y" value={studio.refinement} onChange={(event) => updateStudio({ refinement: event.target.value })} placeholder="Example: calmer center, softer haze, more negative space…" />
+          <button type="button" className="btn-secondary mt-2 w-full" onClick={() => { void generateDirections(); }} disabled={isGeneratingDirections}>Generate 3 refined options</button>
         </ControlSection>
       </aside>
     </main>

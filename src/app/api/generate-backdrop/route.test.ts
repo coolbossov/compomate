@@ -72,21 +72,12 @@ describe("POST /api/generate-backdrop", () => {
     });
 
     // Default mock: fal returns image directly (no queue)
-    globalThis.fetch = vi.fn()
-      .mockResolvedValueOnce(
-        // fal submit: returns completed response with image
-        new Response(JSON.stringify(FAL_COMPLETED_RESPONSE), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        // image download
-        new Response(Buffer.from("fake-image"), {
-          status: 200,
-          headers: { "Content-Type": "image/png" },
-        }),
-      );
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify(FAL_COMPLETED_RESPONSE), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -99,7 +90,9 @@ describe("POST /api/generate-backdrop", () => {
 
     expect(res.status).toBe(200);
     expect(json.pending).toBe(false);
-    expect(json.dataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(json.sourceUrl).toBe("https://fal-cdn.test/result.png");
+    expect(json.dataUrl).toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
   it("returns 202 when fal queues the job (pending)", async () => {
@@ -129,6 +122,49 @@ describe("POST /api/generate-backdrop", () => {
     expect(res.status).toBe(202);
     expect(json.pending).toBe(true);
     expect(json.statusUrl).toBeDefined();
+  });
+
+  it("requests three exact 4:5 exploration directions with Flux Schnell", async () => {
+    const directionResponse = {
+      images: [
+        { url: 'https://fal-cdn.test/one.jpg', width: 1024, height: 1280 },
+        { url: 'https://fal-cdn.test/two.jpg', width: 1024, height: 1280 },
+        { url: 'https://fal-cdn.test/three.jpg', width: 1024, height: 1280 },
+      ],
+    };
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(directionResponse), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const res = await POST(createPostRequest({ mode: 'directions', prompt: 'Premium background plate only', count: 3 }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.images).toHaveLength(3);
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0] ?? [];
+    expect(String(url)).toContain('fal-ai/flux/schnell');
+    const submitted = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(submitted).toMatchObject({ num_images: 3, image_size: { width: 1024, height: 1280 } });
+  });
+
+  it("finishes one selected direction with faithful 4x Topaz Precision settings", async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ image: { url: 'https://fal-cdn.test/master.jpg' } }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const res = await POST(createPostRequest({ mode: 'master', sourceImageUrl: 'https://assets.example.test/direction.jpg' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.images).toHaveLength(1);
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0] ?? [];
+    expect(String(url)).toContain('topaz/upscale/image/precision');
+    const submitted = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(submitted).toMatchObject({
+      image_url: 'https://assets.example.test/direction.jpg',
+      model: 'High Fidelity V3',
+      upscale_factor: 4,
+      subject_detection: 'Background',
+      face_enhancement: false,
+    });
   });
 
   it("returns 400 when prompt is empty", async () => {
