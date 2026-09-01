@@ -47,7 +47,7 @@ npm run test:e2e:ui
 npm run test:e2e:debug
 ```
 
-The editor-shell smoke suite also verifies that the top-level `Composite` / `Background Studio` workspace switch works and that selecting 1 versus 3 planned subject poses updates the live guide count. It intentionally does not submit paid backdrop-generation requests.
+The editor-shell smoke suite also verifies the Minimal Canvas shell and official pink active state, the top-level `Composite` / `Background Studio` workspace switch, collapsed Background Studio inspector defaults, library-rail collapse behavior, and the 1-versus-3 subject-guide change. It intentionally does not submit paid backdrop-generation requests.
 
 ## Deploy and post-deploy
 

@@ -1,6 +1,15 @@
 'use client';
 
 import { Redo2, Settings, Undo2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { redo, undo, useStore } from '@/lib/store';
 import {
   useCanRedo,
@@ -32,16 +41,16 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
   const redoCount = useRedoCount();
 
   return (
-    <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[color:var(--panel-border)] px-5 py-2 flex-shrink-0">
-      <div className="flex min-w-0 flex-wrap items-center gap-4">
-        <div>
-          <p className="text-sm font-semibold tracking-wide">CompoMate</p>
-          <p className="text-xs text-[var(--text-soft)]">Composite production workstation</p>
+    <header className="flex min-h-[52px] flex-nowrap items-center justify-between gap-2 border-b border-[color:var(--panel-border)] bg-white px-3 py-1.5 sm:px-4 flex-shrink-0" data-testid="app-header">
+      <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-5">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-[var(--brand-primary)] ring-1 ring-[#e6a9e0]" aria-hidden="true" />
+          <p className="hidden text-sm font-semibold tracking-tight sm:block">CompoMate</p>
         </div>
-        <nav className="flex rounded-lg border border-[color:var(--panel-border)] bg-black/20 p-0.5" aria-label="Workspace">
+        <nav className="flex items-center gap-1" aria-label="Workspace">
           <button
             type="button"
-            className={`rounded-md px-3 py-1 text-xs transition-colors ${workspace === 'composite' ? 'bg-[#5558df] text-white' : 'text-[var(--text-soft)] hover:text-white'}`}
+            className={`rounded-md border-b-2 px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 ${workspace === 'composite' ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-soft)] hover:bg-[#faf0f9] hover:text-[var(--text-primary)]'}`}
             onClick={() => onWorkspaceChange('composite')}
             aria-current={workspace === 'composite' ? 'page' : undefined}
           >
@@ -49,7 +58,7 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
           </button>
           <button
             type="button"
-            className={`rounded-md px-3 py-1 text-xs transition-colors ${workspace === 'background-studio' ? 'bg-[#5558df] text-white' : 'text-[var(--text-soft)] hover:text-white'}`}
+            className={`rounded-md border-b-2 px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 ${workspace === 'background-studio' ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-soft)] hover:bg-[#faf0f9] hover:text-[var(--text-primary)]'}`}
             onClick={() => onWorkspaceChange('background-studio')}
             aria-current={workspace === 'background-studio' ? 'page' : undefined}
           >
@@ -58,7 +67,7 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
         </nav>
         {workspace === 'composite' && (
           <input
-            className="input h-7 w-48 text-xs"
+            className="input hidden h-7 w-48 text-xs md:block"
             placeholder="Job name"
             value={jobName}
             onChange={(e) => setJobName(e.target.value)}
@@ -66,10 +75,10 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
           />
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {workspace === 'composite' && <button
           type="button"
-          className="btn-secondary h-7 w-7 p-0"
+          className="btn-secondary hidden h-7 w-7 p-0 md:flex"
           onClick={() => undo()}
           disabled={!canUndo}
           aria-label="Undo"
@@ -79,7 +88,7 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
         </button>}
         {workspace === 'composite' && <button
           type="button"
-          className="btn-secondary h-7 w-7 p-0"
+          className="btn-secondary hidden h-7 w-7 p-0 md:flex"
           onClick={() => redo()}
           disabled={!canRedo}
           aria-label="Redo"
@@ -89,9 +98,9 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
         </button>}
         {workspace === 'composite' && <button
           type="button"
-          className={`btn-secondary h-7 px-2 text-xs ${
+          className={`btn-secondary hidden h-7 px-2 text-xs md:flex ${
             showSideBySide
-              ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]'
+              ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]'
               : ''
           }`}
           onClick={() => setShowSideBySide(!showSideBySide)}
@@ -102,9 +111,9 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
         </button>}
         {workspace === 'composite' && <button
           type="button"
-          className={`btn-secondary h-7 px-2 text-xs ${
+          className={`btn-secondary hidden h-7 px-2 text-xs md:flex ${
             showDangerZone
-              ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]'
+              ? 'border-[var(--brand-secondary)] bg-[var(--brand-primary)] text-[var(--text-primary)]'
               : ''
           }`}
           onClick={() => setShowDangerZone(!showDangerZone)}
@@ -113,24 +122,32 @@ export function AppHeader({ workspace, onWorkspaceChange }: AppHeaderProps) {
         >
           Crop Guides
         </button>}
-        <details className="group relative">
-          <summary className="btn-secondary flex h-7 cursor-pointer list-none items-center gap-1.5 px-2 text-xs" title="Application settings">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="btn-secondary flex h-7 items-center gap-1.5 px-2 text-xs"
+            title="Application settings"
+            aria-label="Application settings"
+          >
             <Settings className="h-3.5 w-3.5" />
-            Settings
-          </summary>
-          <div className="absolute right-0 top-9 z-50 w-56 rounded-xl border border-[color:var(--panel-border)] bg-[var(--panel-bg)] p-3 shadow-2xl">
-            <p className="text-xs font-semibold text-white">Application settings</p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--text-soft)]">Shared editor preferences and help live here.</p>
+            <span className="hidden sm:inline">Settings</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60 border border-[color:var(--panel-border)] bg-[var(--panel-bg)] p-2 text-[var(--text-primary)] shadow-lg">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Application settings</DropdownMenuLabel>
+              <p className="px-1.5 pb-2 text-[10px] leading-4 text-[var(--text-soft)]">Shared editor preferences and help live here.</p>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
             {workspace === 'composite' && (
-              <div className="mt-3 space-y-2">
-                <button type="button" className="btn-secondary w-full text-left" onClick={() => setShowSideBySide(!showSideBySide)}>Compare view: {showSideBySide ? 'On' : 'Off'}</button>
-                <button type="button" className="btn-secondary w-full text-left" onClick={() => setShowDangerZone(!showDangerZone)}>Crop guides: {showDangerZone ? 'On' : 'Off'}</button>
-              </div>
+              <>
+                <DropdownMenuItem onClick={() => setShowSideBySide(!showSideBySide)}>Compare view: {showSideBySide ? 'On' : 'Off'}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowDangerZone(!showDangerZone)}>Crop guides: {showDangerZone ? 'On' : 'Off'}</DropdownMenuItem>
+              </>
             )}
-            <button type="button" className="btn-secondary mt-2 w-full text-left" onClick={() => setShowShortcuts(true)}>Keyboard shortcuts</button>
-            <div className="mt-3 rounded-md border border-[color:var(--panel-border)] px-2 py-1 text-[10px] text-[var(--text-soft)]">Internal Tool</div>
-          </div>
-        </details>
+            <DropdownMenuItem onClick={() => setShowShortcuts(true)}>Keyboard shortcuts</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <p className="px-1.5 py-1 text-[10px] text-[var(--text-soft)]">Internal Tool</p>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button
           type="button"
           className="btn-secondary h-7 w-7 p-0 text-xs font-bold"

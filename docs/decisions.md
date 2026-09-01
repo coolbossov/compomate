@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-09-01] Minimal Canvas Is CompoMate's Single Editor Theme
+
+**Status:** Accepted
+
+**Decision:** CompoMate uses one light, image-first Minimal Canvas visual system across Composite and Background Studio. The official brand pink (`#FFDBFD`) is the highlight color for selected states, focus, and primary actions, paired with graphite foreground text for readability. Background Studio uses a collapsible library rail, dominant 4:5 preview, and collapsed right inspector.
+
+**Why:** The application is primarily a widescreen production tool. A quiet shell keeps attention on the image, while collapsible controls remain discoverable without competing with the preview. A single permanent design avoids the complexity and inconsistency of maintaining multiple themes.
+
+**Boundaries:** This changes presentation and layout only. Compositing, export, project persistence, image generation, Supabase, and R2 behavior remain unchanged. The canvas and photographic overlays may retain dark or image-dependent surfaces where contrast requires them.
+
+---
+
 ## [2026-09-01] Vercel Deployments Are Production-Only
 
 **Status:** Accepted

@@ -18,7 +18,7 @@ export function LeftSidebar() {
         onValueChange={(value) => setLeftTab(value as 'files' | 'backdrops')}
         className="gap-3"
       >
-        <TabsList className="grid w-full grid-cols-2 bg-white/4">
+        <TabsList className="grid w-full grid-cols-2 bg-[#f3f3f5]">
           <TabsTrigger value="files" className="text-xs">
             Subjects
           </TabsTrigger>

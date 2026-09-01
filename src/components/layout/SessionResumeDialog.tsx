@@ -99,11 +99,11 @@ export function SessionResumeDialog() {
       <DialogContent className="max-w-sm bg-[var(--panel-bg)] border-[var(--panel-border)] text-[var(--text-primary)]">
         <DialogHeader>
           <DialogTitle className="text-[var(--text-primary)]">Resume last session?</DialogTitle>
-          <DialogDescription className="text-sm text-[#C9BEFF]">
+          <DialogDescription className="text-sm text-[var(--text-soft)]">
             Your workspace settings were already restored automatically. Keep them, or clear the saved session and start fresh.
           </DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-[#C9BEFF]">
+        <p className="text-sm text-[var(--text-soft)]">
           Found session <strong className="text-[var(--text-primary)]">{session.jobName}</strong>{' '}
           — saved {formatSessionAge(session.savedAt)}.
         </p>
@@ -128,7 +128,7 @@ export function SessionResumeDialog() {
             </div>
           )}
           <Button
-            className="bg-[#6367FF] hover:bg-[#7478FF] text-white"
+            className="bg-[var(--brand-primary)] text-[var(--text-primary)] hover:bg-[var(--brand-secondary)]"
             onClick={() => {
               setJobName(session.jobName);
               setExportProfile(session.lastExportProfile);

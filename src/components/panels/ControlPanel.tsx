@@ -65,7 +65,7 @@ function ToggleControl({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-white/2 px-3 py-2 text-xs text-[var(--text-primary)]">
+    <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[color:var(--panel-border)] bg-[#f8f8f9] px-3 py-2 text-xs text-[var(--text-primary)]">
       <input
         type="checkbox"
         className="h-4 w-4 accent-[var(--brand-primary)]"
@@ -90,7 +90,7 @@ function SectionHeader({
       <button
         type="button"
         onClick={onReset}
-        className="p-1 rounded hover:bg-[#2A2A38] text-[#6367FF] opacity-60 hover:opacity-100 transition-opacity"
+        className="rounded p-1 text-[var(--brand-soft)] opacity-60 transition-opacity hover:bg-[var(--brand-primary)] hover:opacity-100"
         title={`Reset ${title} to defaults`}
         aria-label={`Reset ${title} to defaults`}
       >
