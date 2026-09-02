@@ -331,8 +331,15 @@ export const BackdropPanel = forwardRef<BackdropPanelHandle>(function BackdropPa
   // ---------------------------------------------------------------------------
 
   const activeSubject = subjects.find((s) => s.id === activeSubjectId) ?? null;
+  const hasFailedBackdropSaves = backdrops.some((backdrop) =>
+    !backdrop.r2Key && backdrop.persistenceStatus === 'error',
+  );
   const hasUnrestorableBackdrops = backdrops.some((backdrop) =>
-    !backdrop.r2Key && (backdrop.persistenceStatus === 'pending' || backdrop.source.startsWith('ai-')),
+    !backdrop.r2Key && (
+      backdrop.persistenceStatus === 'pending'
+      || backdrop.persistenceStatus === 'error'
+      || backdrop.source.startsWith('ai-')
+    ),
   );
 
   async function serializeAsset(
@@ -581,6 +588,26 @@ export const BackdropPanel = forwardRef<BackdropPanelHandle>(function BackdropPa
           <h2 className="panel-title">Saved projects</h2>
           <p className="mt-1 text-[10px] leading-4 text-[var(--text-soft)]">Save directions, the selected design, overlays, and the production master so this workspace can be reopened later.</p>
         </div>
+        {supabaseConfigured === false ? (
+          <div
+            id="project-persistence-unavailable"
+            className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950"
+            role="status"
+          >
+            <p className="text-xs font-semibold">Project saving is unavailable</p>
+            <p className="mt-1 text-[10px] leading-4">
+              Backgrounds remain available in this browser session, but this workspace cannot be reopened later until an administrator turns on project storage.
+            </p>
+            {projectPersistenceReason ? (
+              <details className="mt-2 text-[10px]">
+                <summary className="cursor-pointer font-medium">Technical details</summary>
+                <p className="mt-1 leading-4">{projectPersistenceReason}</p>
+              </details>
+            ) : null}
+          </div>
+        ) : supabaseConfigured === null ? (
+          <p className="text-[10px] text-[var(--text-soft)]" role="status">Checking project storage…</p>
+        ) : null}
         <input
           className="input"
           value={projectName}
@@ -593,9 +620,30 @@ export const BackdropPanel = forwardRef<BackdropPanelHandle>(function BackdropPa
             type="button"
             onClick={() => { void saveProject(); }}
             disabled={isSavingProject || supabaseConfigured !== true || hasUnrestorableBackdrops}
-            title={hasUnrestorableBackdrops ? 'Wait for generated assets to finish saving.' : undefined}
+            aria-describedby={supabaseConfigured === false ? 'project-persistence-unavailable' : undefined}
+            title={
+              supabaseConfigured === false
+                ? 'Project storage is unavailable in this environment.'
+                : supabaseConfigured === null
+                  ? 'Checking project storage.'
+                  : hasFailedBackdropSaves
+                    ? 'Retry or remove every asset whose save failed before saving the project.'
+                  : hasUnrestorableBackdrops
+                    ? 'Wait for generated assets to finish saving.'
+                    : undefined
+            }
           >
-            {isSavingProject ? 'Saving…' : hasUnrestorableBackdrops ? 'Saving assets…' : 'Save project'}
+            {isSavingProject
+              ? 'Saving…'
+              : supabaseConfigured === false
+                ? 'Project saving unavailable'
+                : supabaseConfigured === null
+                  ? 'Checking project storage…'
+                  : hasFailedBackdropSaves
+                    ? 'Fix asset saves first'
+                  : hasUnrestorableBackdrops
+                    ? 'Saving assets…'
+                    : 'Save project'}
           </button>
           <button
             className="btn-secondary"
@@ -607,13 +655,6 @@ export const BackdropPanel = forwardRef<BackdropPanelHandle>(function BackdropPa
           </button>
         </div>
         <div className="asset-list">
-          {supabaseConfigured === false ? (
-            <div className="asset-item">
-              <p className="text-[11px] text-[var(--text-soft)]">
-                {projectPersistenceReason ?? 'Remote project persistence is unavailable in this environment.'}
-              </p>
-            </div>
-          ) : null}
           {savedProjects.map((project) => (
             <div key={project.id} className="asset-item">
               <button

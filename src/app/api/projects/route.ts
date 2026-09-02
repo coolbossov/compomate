@@ -5,6 +5,7 @@ import {
 import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { checkRateLimit, requestIp } from "@/lib/server/rate-limit";
 import { applySessionCookie, getOrCreateSessionId } from "@/lib/server/session-cookie";
+import { retainR2Objects } from "@/lib/server/r2-ownership";
 import { isProjectSnapshot, type ProjectSnapshot } from "@/lib/shared/project-snapshot";
 
 export const runtime = "nodejs";
@@ -17,6 +18,14 @@ type SaveProjectBody = {
   name?: string;
   snapshot?: ProjectSnapshot;
 };
+
+function projectR2Keys(snapshot: ProjectSnapshot): string[] {
+  return [
+    snapshot.activeBackdrop?.r2Key,
+    snapshot.activeSubject?.r2Key,
+    ...(snapshot.backdrops ?? []).map((backdrop) => backdrop.r2Key),
+  ].filter((key): key is string => typeof key === "string" && key.trim() !== "");
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ip = requestIp(request.headers);
@@ -128,6 +137,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return withSessionCookie(NextResponse.json(
       { error: "Project payload is too large to store. Use fewer/lower-resolution assets." },
       { status: 413 },
+    ));
+  }
+
+  try {
+    await retainR2Objects(projectR2Keys(body.snapshot), sessionState.sessionId);
+  } catch (error) {
+    console.error(
+      "[projects] Asset retention error:",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return withSessionCookie(NextResponse.json(
+      { error: "Could not retain every project asset. Retry asset saving before saving the project." },
+      { status: 500 },
     ));
   }
 

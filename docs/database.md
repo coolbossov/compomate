@@ -109,6 +109,8 @@ Tracks R2 objects for lifecycle management and expiry cleanup.
 | `session_token` | text | Owning session |
 | `expires_at` | timestamptz NULLABLE | Added migration 20260322; used for cleanup jobs |
 
+Temporary subject and backdrop uploads receive a 24-hour expiry. Saving a project verifies that every referenced R2 key belongs to the current browser session and clears those expiries before the project record is inserted. A project save fails closed if any asset cannot be retained, so a successful saved project does not depend on temporary-upload cleanup timing.
+
 ---
 
 ### `batch_jobs` (migration pending)
