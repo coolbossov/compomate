@@ -1,6 +1,7 @@
 # CompoMate — Agent Work Log
 
 ## 2026-09-01
+- fix(ci): make changelog enforcement compare the fetched base and pull-request trees directly so shallow PR checkouts do not fail without a merge base.
 - fix(r2-upload): allow the production CompoMate R2 Worker upload origin in the browser Content Security Policy so direct asset saves can complete before a project is persisted.
 - fix(project-durability): project save now verifies and removes expiry from every session-owned R2 asset before inserting the project record, preventing a restorable workspace from losing its backgrounds to temporary-upload cleanup after 24 hours.
 - fix(background-studio): explain unavailable project storage with a human-readable status, an explicit disabled-action label, an accessible description, and optional technical details instead of leaving “Save project” ambiguously disabled. Failed backdrop uploads now block project save with a direct retry/remove recovery instruction.
