@@ -44,6 +44,10 @@ vi.mock("@/lib/server/rate-limit", () => ({
   requestIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
+vi.mock("@/lib/server/r2-ownership", () => ({
+  retainR2Objects: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -52,6 +56,7 @@ import { GET, POST } from "./route";
 import { checkRateLimit } from "@/lib/server/rate-limit";
 import { getProjectPersistenceStatus } from "@/lib/server/project-persistence";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
+import { retainR2Objects } from "@/lib/server/r2-ownership";
 import { PROJECT_SNAPSHOT_VERSION } from "@/lib/constants";
 import { DEFAULT_BACKGROUND_STUDIO_STATE } from "@/lib/shared/background-studio";
 
@@ -160,6 +165,7 @@ describe("GET /api/projects", () => {
       remaining: 10,
       resetAt: Date.now() + 60_000,
     });
+    vi.mocked(retainR2Objects).mockResolvedValue(undefined);
 
     const client = buildMockClient();
     vi.mocked(getSupabaseAdminClient).mockReturnValue(client as never);
@@ -231,6 +237,7 @@ describe("POST /api/projects", () => {
       remaining: 10,
       resetAt: Date.now() + 60_000,
     });
+    vi.mocked(retainR2Objects).mockResolvedValue(undefined);
 
     const client = buildMockClient();
     vi.mocked(getSupabaseAdminClient).mockReturnValue(client as never);
@@ -245,6 +252,45 @@ describe("POST /api/projects", () => {
     expect(res.status).toBe(201);
     expect(json.project).toBeDefined();
     expect(json.project.id).toBe("p2");
+  });
+
+  it("retains every referenced R2 asset before writing the project", async () => {
+    const snapshot = validSnapshot();
+    snapshot.activeBackdrop = { name: "active.jpg", r2Key: "backdrops/active.jpg" };
+    snapshot.activeSubject = { name: "subject.png", r2Key: "subjects/subject.png" };
+    snapshot.backdrops = [{
+      id: "backdrop-1",
+      name: "direction.jpg",
+      r2Key: "backdrops/direction.jpg",
+      width: 1024,
+      height: 1280,
+      source: "ai-direction",
+      stage: "direction",
+      createdAt: Date.now(),
+    }];
+
+    const res = await POST(createPostRequest({ name: "Durable Project", snapshot }));
+
+    expect(res.status).toBe(201);
+    expect(retainR2Objects).toHaveBeenCalledWith(
+      ["backdrops/active.jpg", "subjects/subject.png", "backdrops/direction.jpg"],
+      expect.any(String),
+    );
+  });
+
+  it("does not write a project when an R2 asset cannot be retained", async () => {
+    const client = buildMockClient();
+    vi.mocked(getSupabaseAdminClient).mockReturnValue(client as never);
+    vi.mocked(retainR2Objects).mockRejectedValue(new Error("ownership mismatch"));
+    const snapshot = validSnapshot();
+    snapshot.activeBackdrop = { name: "active.jpg", r2Key: "backdrops/not-owned.jpg" };
+
+    const res = await POST(createPostRequest({ name: "Unsafe Project", snapshot }));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error).toMatch(/retain every project asset/i);
+    expect(client._singleMock).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid JSON body", async () => {

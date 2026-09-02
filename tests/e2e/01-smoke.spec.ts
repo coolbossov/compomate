@@ -193,6 +193,55 @@ test.describe('Main app shell', () => {
     await expect(page.getByText('Production master', { exact: true })).toHaveCount(1);
     await expect(page.getByText(/^4096×5120/)).toBeVisible();
   });
+
+  test('project storage unavailability is explained instead of looking stuck', async ({ page }) => {
+    await page.route('**/api/projects', async (route) => {
+      await route.fulfill({
+        status: 200,
+        json: {
+          projects: [],
+          configured: false,
+          available: false,
+          reason: 'Remote project persistence is disabled until auth is implemented.',
+        },
+      });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Background Studio' }).click();
+
+    const unavailable = page.getByRole('status').filter({ hasText: 'Project saving is unavailable' });
+    await expect(unavailable).toContainText('cannot be reopened later');
+    const saveButton = page.getByRole('button', { name: 'Project saving unavailable', exact: true });
+    await expect(saveButton).toBeDisabled();
+    await expect(saveButton).toHaveAttribute('aria-describedby', 'project-persistence-unavailable');
+  });
+
+  test('a failed backdrop upload blocks project save with a recovery action', async ({ page }) => {
+    await page.route('**/api/projects', async (route) => {
+      await route.fulfill({ status: 200, json: { projects: [], configured: true, available: true } });
+    });
+    await page.route('**/api/r2/presign', async (route) => {
+      await route.fulfill({ status: 500, json: { error: 'R2_UPLOAD_FAILED' } });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Background Studio' }).click();
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Add Files', exact: true }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({
+      name: 'failed-backdrop.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+    });
+
+    await expect(page.getByText(/save failed/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible();
+    const saveButton = page.getByRole('button', { name: 'Fix asset saves first', exact: true });
+    await expect(saveButton).toBeDisabled();
+    await expect(saveButton).toHaveAttribute('title', /Retry or remove every asset/i);
+  });
 });
 
 test.describe('API: export requires valid payload', () => {
