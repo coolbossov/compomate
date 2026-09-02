@@ -1,6 +1,7 @@
 # CompoMate — Agent Work Log
 
 ## 2026-09-01
+- fix(r2-upload): allow the production CompoMate R2 Worker upload origin in the browser Content Security Policy so direct asset saves can complete before a project is persisted.
 - fix(project-durability): project save now verifies and removes expiry from every session-owned R2 asset before inserting the project record, preventing a restorable workspace from losing its backgrounds to temporary-upload cleanup after 24 hours.
 - fix(background-studio): explain unavailable project storage with a human-readable status, an explicit disabled-action label, an accessible description, and optional technical details instead of leaving “Save project” ambiguously disabled. Failed backdrop uploads now block project save with a direct retry/remove recovery instruction.
 - feat(background-production): guide operators through Direction → Explore 3 → Refine → Production master. Guided requests now create three exact 4:5 Flux Schnell options, front-load an empty-scene/zero-people requirement, preserve team colors without hallucinating text/logos, and finish only the selected option with a faithful 4× Topaz Precision master (4096×5120 from the standard 1024×1280 direction). Provider JSON remains lightweight while an allowlisted same-origin stream carries full-resolution bytes into the existing direct-to-R2 path, avoiding Vercel's 4.5MB function payload ceiling.

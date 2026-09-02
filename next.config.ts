@@ -32,7 +32,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' blob: data: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://us.i.posthog.com https://*.sentry.io https://*.fal.run https://*.fal.media https://generativelanguage.googleapis.com https://*.r2.cloudflarestorage.com wss:",
+      "connect-src 'self' https://us.i.posthog.com https://*.sentry.io https://*.fal.run https://*.fal.media https://generativelanguage.googleapis.com https://*.r2.cloudflarestorage.com https://compomate-r2.compomate-sapd.workers.dev wss:",
       "worker-src 'self' blob: https://cdn.jsdelivr.net",
       "frame-ancestors 'none'",
     ].join("; "),
