@@ -1,6 +1,7 @@
 # CompoMate — Agent Work Log
 
 ## 2026-09-01
+- fix(project-save): create a bounded 1024px WebP derivative for uploaded team-logo overlays so exact artwork remains restorable without pushing project payloads beyond Vercel's request limit.
 - fix(ci): make changelog enforcement compare the fetched base and pull-request trees directly so shallow PR checkouts do not fail without a merge base.
 - fix(r2-upload): allow the production CompoMate R2 Worker upload origin in the browser Content Security Policy so direct asset saves can complete before a project is persisted.
 - fix(project-durability): project save now verifies and removes expiry from every session-owned R2 asset before inserting the project record, preventing a restorable workspace from losing its backgrounds to temporary-upload cleanup after 24 hours.

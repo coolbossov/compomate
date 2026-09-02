@@ -112,6 +112,33 @@ export function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+export function fitWithinMaxDimension(width: number, height: number, maxDimension: number): { width: number; height: number } {
+  const scale = Math.min(1, maxDimension / Math.max(width, height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+export async function fileToOverlayDataUrl(file: File, maxDimension = 1024): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageElement(objectUrl);
+    const dimensions = fitWithinMaxDimension(image.naturalWidth, image.naturalHeight, maxDimension);
+    const canvas = document.createElement('canvas');
+    canvas.width = dimensions.width;
+    canvas.height = dimensions.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Failed to prepare the logo overlay.');
+    context.drawImage(image, 0, 0, dimensions.width, dimensions.height);
+    const blob = await canvasToBlob(canvas, 'image/webp', 0.9);
+    const overlayFile = new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'logo'}.webp`, { type: blob.type });
+    return fileToDataUrl(overlayFile);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Image dimension loading
 // ---------------------------------------------------------------------------

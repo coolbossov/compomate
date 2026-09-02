@@ -22,7 +22,7 @@ import {
   type BackgroundStyleId,
   type HeadshotEnvironment,
 } from '@/lib/shared/background-studio';
-import { fileToDataUrl } from '@/lib/client/utils';
+import { fileToOverlayDataUrl } from '@/lib/client/utils';
 
 const STYLES = [
   { id: 'arena', label: 'Cinematic Arena', swatch: 'from-emerald-950 via-zinc-950 to-emerald-700' },
@@ -111,7 +111,7 @@ export function BackgroundStudio({ onUseInComposite }: BackgroundStudioProps) {
 
   async function handleLogoUpload(file: File | undefined) {
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
+    const dataUrl = await fileToOverlayDataUrl(file);
     updateStudio({ logoDataUrl: dataUrl, includeLogo: true });
   }
 
