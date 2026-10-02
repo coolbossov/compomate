@@ -10,6 +10,8 @@ test('all six jobs have fixed optional labels and hosted fallback', () => {
       count++;
       assert.match(line, /ovh-compomate-ci-ephemeral/);
       assert.match(line, /ubuntu-latest/);
+      assert.match(line, /fromJSON\(/);
+      assert.match(line, /\["self-hosted","Linux","X64","ovh-compomate-ci-ephemeral"\]/);
       assert.doesNotMatch(line, /runs-on: \$\{\{ vars\.[^ ]+ \}\}/);
     }
   }
@@ -38,11 +40,13 @@ test('actual CI expressions select the intended fixed runner for 384 contexts', 
             const inputs = { runner_target: target };
             const vars = { OVH_COMPOMATE_CI_RUNNER_LABEL: ciLabel, OVH_COMPOMATE_E2E_RUNNER_LABEL: e2eLabel };
             // These inspected expressions use only literals, context properties,
-            // equality and &&/||; their string truthiness matches GitHub here.
-            const actual = expressions.map(expression => Function('github', 'inputs', 'vars', `return (${expression});`)(github, inputs, vars));
+            // equality, &&/|| and fromJSON; use JSON.parse for the actual label array.
+            const actual = expressions.map(expression => Function('github', 'inputs', 'vars', 'fromJSON', `return (${expression});`)(github, inputs, vars, JSON.parse));
             const canary = event === 'workflow_dispatch' && ref === 'refs/heads/main' && target === 'ovh';
             const normal = event !== 'workflow_dispatch' && ciLabel === label;
-            assert.deepEqual(actual, [canary || normal ? label : 'ubuntu-latest', e2eLabel === label ? label : 'ubuntu-latest', ciLabel === label ? label : 'ubuntu-latest']);
+            const selected = ['self-hosted', 'Linux', 'X64', label];
+            const hosted = ['ubuntu-latest'];
+            assert.deepEqual(actual, [canary || normal ? selected : hosted, e2eLabel === label ? selected : hosted, ciLabel === label ? selected : hosted]);
             checked++;
           }
         }

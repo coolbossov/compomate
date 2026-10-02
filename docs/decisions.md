@@ -173,3 +173,8 @@ The initial release does not add organization tables, authentication changes, mo
 Use repository-scoped disposable VMs for eligible CI and trusted main verification, preserving hosted defaults. Fixed labels prevent arbitrary runner selection. E2E uses a separate switch because its service-role credential requires verified nonproduction scope. Manual CI OVH selection is main-only and cannot run the PR-only merge or E2E job. Keep all switches absent until installed-profile identity, canaries, secret boundaries and VM disposal are proved. Rollback by unsetting the exact switches after reconciling in-flight jobs.
 
 `OVH_COMPOMATE_VERIFY_RUNNER_LABEL` independently admits the main-only production smoke job and its existing failure-issue/notification behavior after their trust boundary is verified. CI canaries do not dispatch that workflow.
+
+
+### OVH canary label correction (2026-10-02)
+
+The first manual canary queued with only the custom label and the controller correctly refused it. All six workflow jobs now use `fromJSON` to select `["self-hosted", "Linux", "X64", "ovh-compomate-ci-ephemeral"]` or `["ubuntu-latest"]`. The controller admission rule, independent switches, hosted fallback and job steps remain unchanged. Routing tests assert the complete label set and evaluate all 384 CI contexts; a new live canary must prove admission and disposal before activation.
