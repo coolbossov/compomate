@@ -1,5 +1,9 @@
 # CompoMate — Agent Work Log
 
+## 2026-10-02 — Correct OVH admission labels
+
+- Request the complete self-hosted Linux label set for all six eligible jobs so the controller can admit the manual canary; preserve hosted fallback, independent activation switches and job behavior.
+
 ## 2026-10-02 — Prepare isolated OVH Actions routing
 
 - Add fixed opt-in disposable-runner routing with hosted defaults and a main-only manual CI canary; keep E2E admission separate until its credential target is proved. No runner or routing switch is activated.

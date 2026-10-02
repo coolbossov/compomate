@@ -77,3 +77,8 @@ npm run test:diag
 The optional fixed label is `ovh-compomate-ci-ephemeral`. `OVH_COMPOMATE_CI_RUNNER_LABEL` selects check, auto-merge, changelog, infra advisory; `OVH_COMPOMATE_E2E_RUNNER_LABEL` is independently gated for PR E2E. Unset or unexpected values select hosted Ubuntu. Manual CI `runner_target: ovh` selects OVH only on main; PR-only E2E and merge remain skipped. No variables or host resources were activated by source preparation. Preserve the existing production smoke retry and notification behavior. Run `node --test scripts/ovh-routing.test.mjs` before review, plus the normal verify contract before release.
 
 `OVH_COMPOMATE_VERIFY_RUNNER_LABEL` independently admits the main-only production smoke job and its existing failure-issue/notification behavior after their trust boundary is verified. CI canaries do not dispatch that workflow.
+
+
+### OVH canary label correction (2026-10-02)
+
+The first manual canary queued with only the custom label and the controller correctly refused it. All six workflow jobs now use `fromJSON` to select `["self-hosted", "Linux", "X64", "ovh-compomate-ci-ephemeral"]` or `["ubuntu-latest"]`. The controller admission rule, independent switches, hosted fallback and job steps remain unchanged. Routing tests assert the complete label set and evaluate all 384 CI contexts; a new live canary must prove admission and disposal before activation.
