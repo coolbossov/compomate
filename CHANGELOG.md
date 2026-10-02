@@ -1,5 +1,8 @@
 # CompoMate — Agent Work Log
 
+## 2026-10-02 — Prepare isolated OVH Actions routing
+
+- Add fixed opt-in disposable-runner routing with hosted defaults and a main-only manual CI canary; keep E2E admission separate until its credential target is proved. No runner or routing switch is activated.
 ## 2026-09-01
 - fix(project-save): create a bounded 1024px WebP derivative for uploaded team-logo overlays so exact artwork remains restorable without pushing project payloads beyond Vercel's request limit.
 - fix(ci): make changelog enforcement compare the fetched base and pull-request trees directly so shallow PR checkouts do not fail without a merge base.

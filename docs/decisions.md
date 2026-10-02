@@ -167,3 +167,9 @@ The initial release does not add organization tables, authentication changes, mo
 **Alternatives considered:**
 - Linear blur gradient mask — requires pixel-level mask operations that Sharp doesn't natively support without complex workarounds
 - Single blurred layer — too artificial; rejected after visual testing
+
+## 2026-10-02 — Opt-in isolated OVH Actions
+
+Use repository-scoped disposable VMs for eligible CI and trusted main verification, preserving hosted defaults. Fixed labels prevent arbitrary runner selection. E2E uses a separate switch because its service-role credential requires verified nonproduction scope. Manual CI OVH selection is main-only and cannot run the PR-only merge or E2E job. Keep all switches absent until installed-profile identity, canaries, secret boundaries and VM disposal are proved. Rollback by unsetting the exact switches after reconciling in-flight jobs.
+
+`OVH_COMPOMATE_VERIFY_RUNNER_LABEL` independently admits the main-only production smoke job and its existing failure-issue/notification behavior after their trust boundary is verified. CI canaries do not dispatch that workflow.

@@ -7,7 +7,7 @@ on:
 jobs:
   verify:
     name: Verify Production
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.OVH_COMPOMATE_VERIFY_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && 'ovh-compomate-ci-ephemeral' || 'ubuntu-latest' }}
     permissions:
       issues: write
     steps:

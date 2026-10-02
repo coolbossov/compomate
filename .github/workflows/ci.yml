@@ -1,5 +1,12 @@
 name: CI
 on:
+  workflow_dispatch:
+    inputs:
+      runner_target:
+        description: Manual canary target (OVH requires main)
+        type: choice
+        options: [hosted, ovh]
+        default: hosted
   push:
     branches: [main]
     paths-ignore:
@@ -19,7 +26,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.runner_target == 'ovh') || (github.event_name != 'workflow_dispatch' && vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral')) && 'ovh-compomate-ci-ephemeral' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -35,7 +42,7 @@ jobs:
   e2e:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     needs: [check]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.OVH_COMPOMATE_E2E_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && 'ovh-compomate-ci-ephemeral' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -71,7 +78,7 @@ jobs:
     # always() required: e2e is PR-only and "skipped" on push to main.
     # GitHub treats a skipped dependency as failure unless always() wraps it.
     if: always() && github.event_name == 'pull_request' && github.base_ref == 'main' && needs.check.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && 'ovh-compomate-ci-ephemeral' || 'ubuntu-latest' }}
     timeout-minutes: 15
     permissions:
       contents: write

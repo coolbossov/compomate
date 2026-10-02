@@ -8,7 +8,7 @@ on:
 
 jobs:
   changelog:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && 'ovh-compomate-ci-ephemeral' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v6
         with:
