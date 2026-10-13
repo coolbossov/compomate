@@ -28,7 +28,7 @@ Use the lightest tier that matches the change:
 ## CI behavior
 
 - `check` runs on push and pull request.
-- `check` covers lint, TypeScript, and build. The full Vitest suite runs through the required local `npm run verify` readiness command; the current CI check does not run it.
+- `check` covers lint, TypeScript, the full Vitest suite, and build. The same unit suite also runs through the required local `npm run verify` readiness command.
 - `e2e` runs on pull requests only and uses Playwright against a production build.
 - `auto-merge` is allowed only after the required jobs succeed.
 

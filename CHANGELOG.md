@@ -8,7 +8,7 @@
 ## 2026-10-13 — Preserve delayed batch observation
 
 - Refresh completed batch ZIP signatures using the canonical job key and verified session ownership, so a hidden tab does not receive the originally persisted expired signature. Existing temporary-storage retention stays unchanged; deleted downloads report unavailable rather than starting another export.
-- Return retryable 503 for database, ownership-query and signing failures; reserve 404 for a confirmed missing job in the current session. Add status-route and browser regressions for renewal, transient failures and unavailable completion.
+- Return retryable 503 for database, ownership-query and signing failures; reserve 404 for a confirmed missing job in the current session. Reconcile the main CI contract with the enforced Vitest unit gate. Add status-route and browser regressions for renewal, transient failures and unavailable completion.
 
 ## 2026-10-13 — Reduce idle export status requests
 
