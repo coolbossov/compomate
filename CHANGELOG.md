@@ -1,5 +1,11 @@
 # CompoMate — Agent Work Log
 
+## 2026-10-13 — Reduce idle export status requests
+
+- Pause server batch status checks while the tab is hidden, refresh the same job immediately on return, and serialize slow requests to reduce hosting usage without restarting exports.
+- Stop inaccessible-job observation on 401/403/404 with a visible status; retry transient status errors and abort stale observations on job change or unmount.
+- Add timer, visibility, slow-response, terminal-error and cleanup regressions, plus a mocked browser journey proving the original server batch completes and downloads once.
+
 ## 2026-10-02 — Correct OVH admission labels
 
 - Request the complete self-hosted Linux label set for all six eligible jobs so the controller can admit the manual canary; preserve hosted fallback, independent activation switches and job behavior.

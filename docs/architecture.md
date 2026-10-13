@@ -92,6 +92,10 @@ User loads CSV (first name, last name per row)
   → results collected → JSZip → ZIP download
 ```
 
+### Server Batch Status Observation
+
+The server batch start response supplies a job ID. `ExportPanel` observes that ID through `pollServerBatchStatus`, with at most one status read at a time and a three-second delay after foreground responses. Hidden tabs pause scheduled checks and visibility return refreshes the original job immediately. Job change or unmount aborts observation and rejects late responses. Completed/failed jobs and HTTP 401/403/404 end observation; transient failures retry only the status endpoint. Observation never creates another export.
+
 ### AI Backdrop Generation
 ```
 Operator sets direction, activity/environment, style, composition, and optional custom guidance

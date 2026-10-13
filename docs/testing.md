@@ -82,3 +82,13 @@ The optional fixed label is `ovh-compomate-ci-ephemeral`. `OVH_COMPOMATE_CI_RUNN
 ### OVH canary label correction (2026-10-02)
 
 The first manual canary queued with only the custom label and the controller correctly refused it. All six workflow jobs now use `fromJSON` to select `["self-hosted", "Linux", "X64", "ovh-compomate-ci-ephemeral"]` or `["ubuntu-latest"]`. The controller admission rule, independent switches, hosted fallback and job steps remain unchanged. Routing tests assert the complete label set and evaluate all 384 CI contexts; a new live canary must prove admission and disposal before activation.
+
+## Server batch status observation
+
+Run `npx vitest run src/lib/client/server-batch-polling.test.ts` for foreground cadence, serialized slow requests, initially hidden tabs, visibility return during an outstanding request, terminal HTTP 401/403/404, completed/failed jobs, transient errors, cleanup from inside status callbacks and stale responses after job replacement. These tests fake status reads and never submit export jobs or contact providers. The smoke browser suite also uploads controlled PNG fixtures, queues one pair, submits one mocked server batch, observes its original job and downloads completion exactly once; every API request in that case is fulfilled locally.
+
+Before release, run the normal verify/E2E contract and exercise an existing controlled batch export: hide the tab, confirm status requests pause while server processing continues, return to the tab, and confirm its original job completes/downloads once. Check session loss/missing-job feedback without creating a replacement automatically. Local polling tests alone do not prove hosted export completion.
+
+## Release CI unit gate (2026-10-13)
+
+The existing check job now runs Vitest explicitly between typecheck and build. Local release reconciliation found the older workflow omitted the documented unit gate; preserve check/E2E/auto-merge ordering, runner selection, timeouts and provider secrets. The prepared polling candidate retains 372 passing unit tests and 11 local browser cases. The legacy opencode-review workflow is absent; record the configured managed review receipt for the exact candidate rather than claiming that action ran. Production diagnostics requires the private x-diagnostics-token header; an unauthenticated 403 proves the boundary, not service health. Never print the token.

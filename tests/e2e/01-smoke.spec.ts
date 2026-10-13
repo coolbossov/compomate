@@ -194,6 +194,77 @@ test.describe('Main app shell', () => {
     await expect(page.getByText(/^4096×5120/)).toBeVisible();
   });
 
+  test('server batch observes its original job and downloads completion exactly once', async ({ page }) => {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+    const jobId = 'qa-original-export';
+    let starts = 0;
+    let statusReads = 0;
+    let downloads = 0;
+    const unexpectedApiRequests: string[] = [];
+    page.on('download', () => { downloads += 1; });
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/api/r2/presign') {
+        const body = route.request().postDataJSON() as { filename: string };
+        await route.fulfill({ status: 200, json: {
+          uploadUrl: `${url.origin}/mock-batch-upload/${body.filename}`,
+          key: `qa/${body.filename}`,
+          downloadUrl: `${url.origin}/mock-batch-image/${body.filename}`,
+        } });
+      } else if (url.pathname === '/api/projects') {
+        await route.fulfill({ status: 200, json: { configured: false, projects: [] } });
+      } else if (url.pathname === '/api/templates') {
+        await route.fulfill({ status: 200, json: { configured: false, templates: [] } });
+      } else if (url.pathname === '/api/batch-export/start') {
+        expect(route.request().method()).toBe('POST');
+        const body = route.request().postDataJSON() as { items: unknown[]; jobName: string };
+        expect(body.items).toHaveLength(1);
+        expect(body.jobName).toBe('QA batch');
+        starts += 1;
+        await route.fulfill({ status: 200, json: { jobId } });
+      } else if (url.pathname === `/api/batch-export/${jobId}/status`) {
+        expect(route.request().method()).toBe('GET');
+        statusReads += 1;
+        await route.fulfill({ status: 200, json: {
+          status: statusReads === 1 ? 'running' : 'done', total: 1,
+          done_count: statusReads === 1 ? 0 : 1, failed_count: 0, error: null,
+          download_url: statusReads === 1 ? null : `${url.origin}/mock-batch.zip`,
+        } });
+      } else {
+        unexpectedApiRequests.push(`${route.request().method()} ${url.pathname}`);
+        await route.fulfill({ status: 503, json: { error: 'Unmocked API forbidden in local export test.' } });
+      }
+    });
+    await page.route('**/mock-batch-upload/**', (route) => route.fulfill({ status: 200, body: '' }));
+    await page.route('**/mock-batch-image/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: png }));
+    await page.route('**/mock-batch.zip', (route) => route.fulfill({
+      status: 200, contentType: 'application/zip',
+      body: Buffer.from('504b05060000000000000000000000000000000000000000', 'hex'),
+    }));
+    await page.goto('/');
+    await page.getByRole('textbox', { name: 'Job name', exact: true }).first().fill('QA batch');
+    for (const [kind, filename] of [['backdrop', 'qa-backdrop.png'], ['subject', 'qa-subject.png']]) {
+      await page.getByRole('tab', { name: kind === 'backdrop' ? 'Backdrops' : 'Subjects', exact: true }).click();
+      const chooser = page.waitForEvent('filechooser');
+      const uploaded = page.waitForResponse(`**/mock-batch-upload/${filename}`);
+      await page.getByRole('button', { name: `Drop ${kind} images here or click to browse` }).click();
+      await (await chooser).setFiles({ name: filename, mimeType: 'image/png', buffer: png });
+      await uploaded;
+    }
+    await page.getByRole('button', { name: 'Queue Pair', exact: true }).click();
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Run Batch (Server)', exact: true }).click();
+    await expect(page.getByText('Server batch: 0/1 done', { exact: true })).toBeVisible();
+    await expect(page.getByText(jobId.slice(0, 8), { exact: true })).toBeVisible();
+    expect((await downloaded).suggestedFilename()).toBe('QA batch-batch.zip');
+    await expect(page.getByText('✓ Server batch complete', { exact: true })).toBeVisible();
+    await page.waitForTimeout(3500);
+    expect(starts).toBe(1);
+    expect(statusReads).toBe(2);
+    expect(downloads).toBe(1);
+    expect(unexpectedApiRequests).toEqual([]);
+  });
+
   test('project storage unavailability is explained instead of looking stuck', async ({ page }) => {
     await page.route('**/api/projects', async (route) => {
       await route.fulfill({

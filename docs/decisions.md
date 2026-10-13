@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-10-13] Observe Server Batch Exports Only While Visible
+
+**Status:** Accepted for local implementation; release remains held.
+
+Server batch status observation uses one request at a time and waits three seconds after each completed foreground request. Hidden tabs stop scheduling requests; visibility return immediately checks the same existing job, waiting for any outstanding request before issuing another. Effect cleanup aborts pending requests and rejects late responses so an old job cannot update a replacement or trigger a download after unmount.
+
+HTTP 401/403/404 end observation with a visible unavailable state; network errors, throttling and server errors retry status only. No status failure or visibility event submits another export. Existing server processing, session ownership checks, completion downloads and the foreground polling interval remain intact.
+
+**Why:** Fixed intervals overlapped slow requests and consumed hosting requests while operators could not use their progress. A small client poller is sufficient; no scheduler, queue or additional service is needed.
+
+---
+
 ## [2026-09-01] Explore Cheaply, Finish Only the Selected Background
 
 **Status:** Accepted
