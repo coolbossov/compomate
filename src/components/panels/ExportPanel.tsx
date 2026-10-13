@@ -369,6 +369,11 @@ export function ExportPanel() {
         setServerBatchProgress({ done: data.done_count, total: data.total, status: data.status });
         if (data.status === 'done') {
           setIsServerBatchRunning(false);
+          if (!data.download_url) {
+            setServerBatchProgress({ done: data.done_count, total: data.total, status: 'unavailable' });
+            toast.error(data.error ?? 'Server batch finished, but its download is no longer available.');
+            return;
+          }
           captureEvent('server_batch_export_completed', { count: data.done_count });
           if (data.download_url) {
             const a = document.createElement('a');

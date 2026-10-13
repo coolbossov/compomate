@@ -28,7 +28,7 @@ Use the lightest tier that matches the change:
 ## CI behavior
 
 - `check` runs on push and pull request.
-- `check` covers lint, TypeScript, build, and Vitest.
+- `check` covers lint, TypeScript, and build. The full Vitest suite runs through the required local `npm run verify` readiness command; the current CI check does not run it.
 - `e2e` runs on pull requests only and uses Playwright against a production build.
 - `auto-merge` is allowed only after the required jobs succeed.
 
@@ -92,3 +92,13 @@ Before release, run the normal verify/E2E contract and exercise an existing cont
 ## Release CI unit gate (2026-10-13)
 
 The existing check job now runs Vitest explicitly between typecheck and build. Local release reconciliation found the older workflow omitted the documented unit gate; preserve check/E2E/auto-merge ordering, runner selection, timeouts and provider secrets. The prepared polling candidate retains 372 passing unit tests and 11 local browser cases. The legacy opencode-review workflow is absent; record the configured managed review receipt for the exact candidate rather than claiming that action ran. Production diagnostics requires the private x-diagnostics-token header; an unauthenticated 403 proves the boundary, not service health. Never print the token.
+
+### Delayed completed-batch downloads
+
+`npx vitest run 'src/app/api/batch-export/[jobId]/status/route.test.ts'` covers signatures refreshed after an hour, canonical UUID keys, current-session filters, confirmed missing jobs, transient database/ownership/signing errors, unavailable retained metadata, and rejection of arbitrary persisted URL inputs. The mocked ExportPanel browser cases cover retryable 503 followed by completion and missing-download feedback without a duplicate export. The tests do not extend artifact expiry or prove an already deleted ZIP can be recovered; physical existence and exact synthetic fixture readback remain live acceptance requirements.
+
+### Playwright installation on isolated OVH runners
+
+The self-hosted CompoMate guest is unprivileged and uses the verified Chrome-bearing Portal base image, with browser system libraries installed when the image is built. E2E therefore uses `npx playwright install chromium` on `runner.environment == 'self-hosted'`; it downloads the locked Playwright browser without attempting an apt/sudo operation. GitHub-hosted Ubuntu retains `npx playwright install --with-deps chromium`. Neither path skips browser launch or tests, and no host packages or guest privileges are changed. Browser installation may report library-validation warnings; the exact new-head CI browser run must prove launch and E2E on the installed guest.
+
+Evidence for this correction: run `38479853315`, E2E job `115585985360`, failed before tests because `--with-deps` requested sudo. AI Ops committed source `8bc98ce4c889f6ed70894388de4b2e18896ae1b5` installs Chrome in the base and verifies the independent CompoMate image. The installed System03 manifest reports schema `ovh-compomate-runner-image/v1`, Chrome `154.0.8037.97` and image SHA256 `2c1990a53b63b9f9052302e6d21fb4d980bbbe0735c339add60fb97264f6b106`; this identity/source evidence is separate from pending actual CompoMate browser acceptance.

@@ -52,7 +52,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Install Playwright browsers
+      - name: Install Playwright browsers (preinstalled system libraries)
+        if: runner.environment == 'self-hosted'
+        run: npx playwright install chromium
+      - name: Install Playwright browsers and dependencies (GitHub-hosted)
+        if: runner.environment == 'github-hosted'
         run: npx playwright install --with-deps chromium
       - name: Build Next.js
         run: npm run build

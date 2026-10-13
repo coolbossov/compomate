@@ -194,7 +194,10 @@ test.describe('Main app shell', () => {
     await expect(page.getByText(/^4096×5120/)).toBeVisible();
   });
 
-  test('server batch observes its original job and downloads completion exactly once', async ({ page }) => {
+  for (const artifactAvailable of [true, false]) {
+  test(artifactAvailable
+    ? 'server batch observes its original job and downloads completion exactly once'
+    : 'server batch shows unavailable completion without downloading or restarting', async ({ page }) => {
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
     const jobId = 'qa-original-export';
     let starts = 0;
@@ -225,10 +228,15 @@ test.describe('Main app shell', () => {
       } else if (url.pathname === `/api/batch-export/${jobId}/status`) {
         expect(route.request().method()).toBe('GET');
         statusReads += 1;
+        if (statusReads === 1) {
+          await route.fulfill({ status: 503, json: { error: 'BATCH_STATUS_UNAVAILABLE' } });
+          return;
+        }
         await route.fulfill({ status: 200, json: {
-          status: statusReads === 1 ? 'running' : 'done', total: 1,
-          done_count: statusReads === 1 ? 0 : 1, failed_count: 0, error: null,
-          download_url: statusReads === 1 ? null : `${url.origin}/mock-batch.zip`,
+          status: statusReads === 2 ? 'running' : 'done', total: 1,
+          done_count: statusReads === 2 ? 0 : 1, failed_count: 0,
+          error: artifactAvailable ? null : "This export's temporary download is no longer available.",
+          download_url: statusReads === 2 || !artifactAvailable ? null : `${url.origin}/mock-batch.zip`,
         } });
       } else {
         unexpectedApiRequests.push(`${route.request().method()} ${url.pathname}`);
@@ -252,18 +260,25 @@ test.describe('Main app shell', () => {
       await uploaded;
     }
     await page.getByRole('button', { name: 'Queue Pair', exact: true }).click();
-    const downloaded = page.waitForEvent('download');
+    const downloaded = artifactAvailable ? page.waitForEvent('download') : null;
     await page.getByRole('button', { name: 'Run Batch (Server)', exact: true }).click();
     await expect(page.getByText('Server batch: 0/1 done', { exact: true })).toBeVisible();
     await expect(page.getByText(jobId.slice(0, 8), { exact: true })).toBeVisible();
-    expect((await downloaded).suggestedFilename()).toBe('QA batch-batch.zip');
-    await expect(page.getByText('✓ Server batch complete', { exact: true })).toBeVisible();
+    if (downloaded) {
+      expect((await downloaded).suggestedFilename()).toBe('QA batch-batch.zip');
+      await expect(page.getByText('✓ Server batch complete', { exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByText('Server batch status unavailable', { exact: true })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText("This export's temporary download is no longer available.", { exact: true })).toBeVisible();
+    }
     await page.waitForTimeout(3500);
     expect(starts).toBe(1);
-    expect(statusReads).toBe(2);
-    expect(downloads).toBe(1);
+    expect(statusReads).toBe(3);
+    expect(downloads).toBe(artifactAvailable ? 1 : 0);
     expect(unexpectedApiRequests).toEqual([]);
   });
+
+  }
 
   test('project storage unavailability is explained instead of looking stuck', async ({ page }) => {
     await page.route('**/api/projects', async (route) => {
