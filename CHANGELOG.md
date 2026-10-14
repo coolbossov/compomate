@@ -1,5 +1,21 @@
 # CompoMate — Agent Work Log
 
+## 2026-10-13 — Install CI browsers without guest privilege changes
+
+- Use browser-only Playwright installation on the isolated OVH runner image, which already includes browser system libraries, to avoid a sudo failure before E2E. Preserve dependency installation on GitHub-hosted Ubuntu and keep browser tests mandatory.
+- Correct testing documentation to distinguish local Vitest readiness from the actual CI check steps.
+
+## 2026-10-13 — Preserve delayed batch observation
+
+- Refresh completed batch ZIP signatures using the canonical job key and verified session ownership, so a hidden tab does not receive the originally persisted expired signature. Existing temporary-storage retention stays unchanged; deleted downloads report unavailable rather than starting another export.
+- Return retryable 503 for database, ownership-query and signing failures; reserve 404 for a confirmed missing job in the current session. Reconcile the main CI contract with the enforced Vitest unit gate. Add status-route and browser regressions for renewal, transient failures and unavailable completion.
+
+## 2026-10-13 — Reduce idle export status requests
+
+- Pause server batch status checks while the tab is hidden, refresh the same job immediately on return, and serialize slow requests to reduce hosting usage without restarting exports.
+- Stop inaccessible-job observation on 401/403/404 with a visible status; retry transient status errors and abort stale observations on job change or unmount.
+- Add timer, visibility, slow-response, terminal-error and cleanup regressions, plus a mocked browser journey proving the original server batch completes and downloads once.
+
 ## 2026-10-02 — Correct OVH admission labels
 
 - Request the complete self-hosted Linux label set for all six eligible jobs so the controller can admit the manual canary; preserve hosted fallback, independent activation switches and job behavior.

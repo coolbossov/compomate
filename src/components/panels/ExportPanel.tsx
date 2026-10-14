@@ -31,6 +31,7 @@ import {
   type NameStyleId,
 } from '@/lib/shared/composition';
 import { makeId, parseErrorText } from '@/lib/client/utils';
+import { pollServerBatchStatus } from '@/lib/client/server-batch-polling';
 import {
   EXPORT_TOAST_DURATION_MS,
   buildExportFilename,
@@ -195,7 +196,7 @@ export function ExportPanel() {
     total: number;
     status: string;
   } | null>(null);
-  const serverBatchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const serverBatchDownloadNameRef = useRef(DEFAULT_JOB_NAME);
 
   const activeProfile = EXPORT_PROFILES[exportProfileId];
 
@@ -360,17 +361,43 @@ export function ExportPanel() {
   // Server batch export
   // ---------------------------------------------------------------------------
 
-  function stopServerBatchPolling(): void {
-    if (serverBatchPollRef.current !== null) {
-      clearInterval(serverBatchPollRef.current);
-      serverBatchPollRef.current = null;
-    }
-  }
-
-  // Clean up polling on unmount
   useEffect(() => {
-    return () => { stopServerBatchPolling(); };
-  }, []);
+    if (!serverBatchJobId || !isServerBatchRunning) return;
+    return pollServerBatchStatus({
+      jobId: serverBatchJobId,
+      onStatus: (data) => {
+        setServerBatchProgress({ done: data.done_count, total: data.total, status: data.status });
+        if (data.status === 'done') {
+          setIsServerBatchRunning(false);
+          if (!data.download_url) {
+            setServerBatchProgress({ done: data.done_count, total: data.total, status: 'unavailable' });
+            toast.error(data.error ?? 'Server batch finished, but its download is no longer available.');
+            return;
+          }
+          captureEvent('server_batch_export_completed', { count: data.done_count });
+          if (data.download_url) {
+            const a = document.createElement('a');
+            a.href = data.download_url;
+            a.download = `${serverBatchDownloadNameRef.current}-batch.zip`;
+            document.body.append(a);
+            a.click();
+            a.remove();
+          }
+          toast.success(`Server batch done — ${data.done_count}/${data.total} exported.`);
+        } else if (data.status === 'failed') {
+          setIsServerBatchRunning(false);
+          toast.error(`Server batch failed: ${data.error ?? 'Unknown error'}`);
+        }
+      },
+      onUnavailable: (status) => {
+        setIsServerBatchRunning(false);
+        setServerBatchProgress((previous) => previous && { ...previous, status: 'unavailable' });
+        toast.error(status === 404
+          ? 'This export job is no longer available. Status checks stopped.'
+          : 'This export job cannot be accessed in this session. Status checks stopped.');
+      },
+    });
+  }, [serverBatchJobId, isServerBatchRunning]);
 
   async function runServerBatchExport(): Promise<void> {
     if (isServerBatchRunning) return;
@@ -378,6 +405,7 @@ export function ExportPanel() {
     const queue = batchItems.filter((i) => i.status === 'pending' || i.status === 'failed');
     if (queue.length === 0) return;
 
+    serverBatchDownloadNameRef.current = jobName || 'Job';
     setIsServerBatchRunning(true);
     setServerBatchJobId(null);
     setServerBatchProgress(null);
@@ -432,53 +460,6 @@ export function ExportPanel() {
       setServerBatchJobId(jobId);
       setServerBatchProgress({ done: 0, total: queue.length, status: 'pending' });
 
-      // Poll for status every 3s
-      serverBatchPollRef.current = setInterval(() => {
-        void (async () => {
-          try {
-            const statusRes = await fetch(`/api/batch-export/${jobId}/status`);
-            if (!statusRes.ok) return;
-
-            const data = (await statusRes.json()) as {
-              status: string;
-              total: number;
-              done_count: number;
-              failed_count: number;
-              download_url: string | null;
-              error: string | null;
-            };
-
-            setServerBatchProgress({
-              done: data.done_count,
-              total: data.total,
-              status: data.status,
-            });
-
-            if (data.status === 'done') {
-              stopServerBatchPolling();
-              setIsServerBatchRunning(false);
-              captureEvent('server_batch_export_completed', { count: data.done_count });
-
-              if (data.download_url) {
-                const a = document.createElement('a');
-                a.href = data.download_url;
-                a.download = `${jobName || 'Job'}-batch.zip`;
-                document.body.append(a);
-                a.click();
-                a.remove();
-              }
-
-              toast.success(`Server batch done — ${data.done_count}/${data.total} exported.`);
-            } else if (data.status === 'failed') {
-              stopServerBatchPolling();
-              setIsServerBatchRunning(false);
-              toast.error(`Server batch failed: ${data.error ?? 'Unknown error'}`);
-            }
-          } catch {
-            // polling errors are non-fatal; keep polling
-          }
-        })();
-      }, 3000);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Server batch failed.';
       toast.error(message);
@@ -830,7 +811,9 @@ export function ExportPanel() {
                   ? '✓ Server batch complete'
                   : serverBatchProgress.status === 'failed'
                     ? '✗ Server batch failed'
-                    : `Server batch: ${serverBatchProgress.done}/${serverBatchProgress.total} done`}
+                    : serverBatchProgress.status === 'unavailable'
+                      ? 'Server batch status unavailable'
+                      : `Server batch: ${serverBatchProgress.done}/${serverBatchProgress.total} done`}
               </span>
               {serverBatchJobId && (
                 <span className="font-mono text-[9px] text-[var(--text-soft)] opacity-50">
