@@ -74,7 +74,7 @@ npm run test:diag
 
 ## OVH routing preparation
 
-The optional fixed label is `ovh-compomate-ci-ephemeral`. `OVH_COMPOMATE_CI_RUNNER_LABEL` selects check, auto-merge, changelog, infra advisory; `OVH_COMPOMATE_E2E_RUNNER_LABEL` is independently gated for PR E2E. Unset or unexpected values select hosted Ubuntu. Manual CI `runner_target: ovh` selects OVH only on main; PR-only E2E and merge remain skipped. No variables or host resources were activated by source preparation. Preserve the existing production smoke retry and notification behavior. Run `node --test scripts/ovh-routing.test.mjs` before review, plus the normal verify contract before release.
+The optional fixed label is `ovh-compomate-ci-ephemeral`. `OVH_COMPOMATE_CI_RUNNER_LABEL` selects check, auto-merge, changelog, infra advisory; `OVH_COMPOMATE_E2E_RUNNER_LABEL` is independently gated for PR E2E. Unset or unexpected values select hosted Ubuntu. Dependabot branches (`dependabot/…`) always select GitHub-hosted `ubuntu-24.04`, ahead of every switch. Manual CI `runner_target: ovh` selects OVH only on main; PR-only E2E and merge remain skipped. No variables or host resources were activated by source preparation. Preserve the existing production smoke retry and notification behavior. Run `node --test scripts/ovh-routing.test.mjs` before review, plus the normal verify contract before release.
 
 `OVH_COMPOMATE_VERIFY_RUNNER_LABEL` independently admits the main-only production smoke job and its existing failure-issue/notification behavior after their trust boundary is verified. CI canaries do not dispatch that workflow.
 

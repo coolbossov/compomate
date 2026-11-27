@@ -25,35 +25,46 @@ test('manual canary is main-only and E2E admission is separate', () => {
   assert.match(text, /if: always\(\) && github.event_name == 'pull_request'/);
 });
 
-test('actual CI expressions select the intended fixed runner for 384 contexts', () => {
+test('actual CI expressions select the intended fixed runner for 576 contexts', () => {
   const source = readFileSync(new URL('ci.yml', dir), 'utf8');
   const expressions = source.split('\n').filter(line => line.includes('runs-on:'))
     .map(line => line.slice(line.indexOf('${{') + 3, line.lastIndexOf('}}')).trim());
   const label = 'ovh-compomate-ci-ephemeral';
   let checked = 0;
   for (const event of ['push', 'pull_request', 'workflow_dispatch']) {
-    for (const ref of ['refs/heads/main', 'refs/heads/feature']) {
+    for (const branch of ['main', 'feature', 'dependabot/npm_and_yarn/next-16.3.0']) {
       for (const target of ['', 'hosted', 'ovh', 'unexpected']) {
         for (const ciLabel of ['', label, 'self-hosted', 'unexpected']) {
           for (const e2eLabel of ['', label, 'self-hosted', 'unexpected']) {
-            const github = { event_name: event, ref };
+            const ref = `refs/heads/${branch}`;
+            // Pull requests expose the branch as head_ref (ref_name is "<pr>/merge"); other events only as ref_name.
+            const github = event === 'pull_request'
+              ? { event_name: event, ref, head_ref: branch, ref_name: '41/merge' }
+              : { event_name: event, ref, head_ref: '', ref_name: branch };
             const inputs = { runner_target: target };
             const vars = { OVH_COMPOMATE_CI_RUNNER_LABEL: ciLabel, OVH_COMPOMATE_E2E_RUNNER_LABEL: e2eLabel };
             // These inspected expressions use only literals, context properties,
-            // equality, &&/|| and fromJSON; use JSON.parse for the actual label array.
-            const actual = expressions.map(expression => Function('github', 'inputs', 'vars', 'fromJSON', `return (${expression});`)(github, inputs, vars, JSON.parse));
+            // equality, &&/||, startsWith and fromJSON; use JSON.parse for the actual
+            // label array and GitHub's case-insensitive startsWith.
+            const startsWith = (value, prefix) => String(value ?? '').toLowerCase().startsWith(String(prefix ?? '').toLowerCase());
+            const actual = expressions.map(expression => Function('github', 'inputs', 'vars', 'fromJSON', 'startsWith', `return (${expression});`)(github, inputs, vars, JSON.parse, startsWith));
             const canary = event === 'workflow_dispatch' && ref === 'refs/heads/main' && target === 'ovh';
             const normal = event !== 'workflow_dispatch' && ciLabel === label;
             const selected = ['self-hosted', 'Linux', 'X64', label];
             const hosted = ['ubuntu-latest'];
-            assert.deepEqual(actual, [canary || normal ? selected : hosted, e2eLabel === label ? selected : hosted, ciLabel === label ? selected : hosted]);
+            const dependabot = branch.startsWith('dependabot/');
+            const dependabotHosted = ['ubuntu-24.04'];
+            const expected = dependabot
+              ? [dependabotHosted, dependabotHosted, dependabotHosted]
+              : [canary || normal ? selected : hosted, e2eLabel === label ? selected : hosted, ciLabel === label ? selected : hosted];
+            assert.deepEqual(actual, expected);
             checked++;
           }
         }
       }
     }
   }
-  assert.equal(checked, 384);
+  assert.equal(checked, 576);
 });
 
 test('PR-only E2E/merge and independent production verification admission stay intact', () => {
