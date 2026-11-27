@@ -1,5 +1,10 @@
 # CompoMate — Agent Work Log
 
+## 2026-11-26 — Dependabot PR checks run on GitHub's servers
+
+- Checks on Dependabot branches (`dependabot/…`) now run on GitHub-hosted `ubuntu-24.04`; every other run keeps its existing runner. Each job has a time limit, and a newer Dependabot push cancels its older run. Alex decided this on 2026-11-26 (rule: ai-ops `docs/infrastructure/github-actions-ovh.md`). CI only; no product change. Product logging: not-required.
+- The runner-routing test now evaluates `startsWith` and Dependabot branches (576 contexts), so it checks the new rule instead of failing; the decision is recorded in `docs/decisions.md`. Reason: review findings on PR #41.
+
 ## 2026-10-13 — Install CI browsers without guest privilege changes
 
 - Use browser-only Playwright installation on the isolated OVH runner image, which already includes browser system libraries, to avoid a sudo failure before E2E. Preserve dependency installation on GitHub-hosted Ubuntu and keep browser tests mandatory.

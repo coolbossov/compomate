@@ -32,9 +32,14 @@ on:
       - "Dockerfile"
       - "docker-compose*"
 
+# Dependabot pushes again on every rebase: drop its older run (other runs never share a group).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ startsWith(github.head_ref || '', 'dependabot/') }}
+
 jobs:
   infra-docs:
-    runs-on: ${{ fromJSON(vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && '["self-hosted","Linux","X64","ovh-compomate-ci-ephemeral"]' || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON(startsWith(github.head_ref || github.ref_name, 'dependabot/') && '["ubuntu-24.04"]' || (vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && '["self-hosted","Linux","X64","ovh-compomate-ci-ephemeral"]' || '["ubuntu-latest"]')) }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6

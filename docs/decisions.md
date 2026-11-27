@@ -1,6 +1,18 @@
 # CompoMate — Architecture Decision Records
 
-**Last Updated:** 2026-09-01
+**Last Updated:** 2026-11-26
+
+---
+
+## [2026-11-26] Dependabot Checks Always Run on GitHub-Hosted Runners
+
+**Status:** Accepted (Alex, 2026-11-26; rule: ai-ops `docs/infrastructure/github-actions-ovh.md`)
+
+**Decision:** Every workflow job on a `dependabot/…` branch (`github.head_ref` for pull requests, `github.ref_name` otherwise) runs on GitHub-hosted `ubuntu-24.04`. This check comes first in each `runs-on` expression, so it takes precedence over the OVH switches (`OVH_COMPOMATE_CI_RUNNER_LABEL`, `OVH_COMPOMATE_E2E_RUNNER_LABEL`, `OVH_COMPOMATE_VERIFY_RUNNER_LABEL`) and the manual `runner_target` canary. All other runs keep the existing opt-in OVH routing and `ubuntu-latest` fallback unchanged. Dependabot jobs get a 15-minute time limit, and a newer Dependabot push cancels its older Changelog and Infrastructure Docs Advisory runs.
+
+**Why:** Dependabot updates are third-party code changes that should not run on the isolated OVH VMs, and they must not wait in the OVH queue. Pinning `ubuntu-24.04` keeps their environment stable.
+
+**Verification:** `scripts/ovh-routing.test.mjs` evaluates the actual CI expressions, including `startsWith`, for 576 contexts, Dependabot branches among them.
 
 ---
 
