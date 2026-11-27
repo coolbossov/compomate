@@ -6,9 +6,15 @@ on:
   push:
     branches: [main]
 
+# Dependabot pushes again on every rebase: drop its older run (other runs never share a group).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ startsWith(github.head_ref || '', 'dependabot/') }}
+
 jobs:
   changelog:
-    runs-on: ${{ fromJSON(vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && '["self-hosted","Linux","X64","ovh-compomate-ci-ephemeral"]' || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON(startsWith(github.head_ref || github.ref_name, 'dependabot/') && '["ubuntu-24.04"]' || (vars.OVH_COMPOMATE_CI_RUNNER_LABEL == 'ovh-compomate-ci-ephemeral' && '["self-hosted","Linux","X64","ovh-compomate-ci-ephemeral"]' || '["ubuntu-latest"]')) }}
+    timeout-minutes: ${{ startsWith(github.head_ref || github.ref_name, 'dependabot/') && 15 || 360 }}  # Dependabot runs on GitHub's servers: stop a hang early
     steps:
       - uses: actions/checkout@v6
         with:
